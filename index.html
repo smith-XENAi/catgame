@@ -96,7 +96,7 @@
             
             <div id="roster-section">
                 <h3>1. 고양이 로스터 및 애니메이션 등록</h3>
-                <p style="font-size:12px; color:#ffcc00;">※ 마스터가 설정하고 저장한 스탯은 시스템의 '절대 기본값(하드코딩)'으로 영구 고정됩니다.</p>
+                <p style="font-size:12px; color:#ffcc00;">※ 레벨업 시 20포인트가 자동으로 스탯에 랜덤 분배되며, 이곳에서 수동으로 스탯을 재조정할 수 있습니다.</p>
                 <div id="cat-anim-list"></div>
             </div>
 
@@ -355,7 +355,7 @@
             const fixedEating = 30;
             const fixedStamina = 40;
 
-            const meta = { name: defaultName }; // 불필요한 색상 데이터 제거
+            const meta = { name: defaultName }; 
             
             config.selectedCats[newId] = { active: false, speed: fixedSpeed, eating: fixedEating, stamina: fixedStamina, anims: {}, meta: meta };
             catStates[newId] = {
@@ -416,12 +416,16 @@
             document.getElementById(`val_eat_${id}`).innerText = eat;
             document.getElementById(`val_stm_${id}`).innerText = stm;
 
+            const state = catStates[id];
+            // [수정] 레벨업에 따른 동적 최대 스탯 한계치 적용
+            const maxLimit = state ? 100 + (state.level - 1) * 20 : 100;
+
             const warn = document.getElementById(`warn_${id}`);
-            if(total > 100) {
-                warn.innerText = `⚠️ 포인트 초과! (${total}/100) 저장이 거부됩니다.`;
+            if(total > maxLimit) {
+                warn.innerText = `⚠️ 포인트 초과! (${total}/${maxLimit}) 저장이 거부됩니다.`;
                 warn.style.color = '#ff3333';
             } else {
-                warn.innerText = `남은 여유 포인트: ${100 - total}`;
+                warn.innerText = `남은 여유 포인트: ${maxLimit - total}`;
                 warn.style.color = '#00ff00';
             }
         }
@@ -434,6 +438,13 @@
                 const cfg = config.selectedCats[id];
                 const state = catStates[id];
                 
+                // [수정] 게임 진행 중(state 존재)이면 현재 랜덤 적용된 스탯을, 시작 전이면 기본 스탯을 표시
+                const maxLimit = state ? 100 + (state.level - 1) * 20 : 100;
+                const currentSpd = state ? state.speed : (cfg.speed || 30);
+                const currentEat = state ? state.eating : (cfg.eating || 30);
+                const currentStm = state ? (state.maxHp - 100) : (cfg.stamina || 40);
+                const remaining = maxLimit - (currentSpd + currentEat + currentStm);
+                
                 rosterDiv.innerHTML += `
                 <div class="cat-row">
                     <div class="cat-header">
@@ -444,11 +455,11 @@
                     </div>
                     
                     <div class="stat-group">
-                        <div style="font-size:12px; color:#ffcc00; margin-bottom:5px;">⚙️ 기본 스탯 설정 (합산 100 제한) - 시스템 기본값으로 영구 고정됩니다.</div>
-                        <div class="stat-item"><span>🏃 속도 (<span id="val_spd_${id}">${cfg.speed || 30}</span>)</span> <input type="range" id="spd_${id}" min="0" max="100" value="${cfg.speed || 30}" oninput="updateStats('${id}')"></div>
-                        <div class="stat-item"><span>🐟 먹기 (<span id="val_eat_${id}">${cfg.eating || 30}</span>)</span> <input type="range" id="eat_${id}" min="0" max="100" value="${cfg.eating || 30}" oninput="updateStats('${id}')"></div>
-                        <div class="stat-item"><span>❤️ 추가체력 (<span id="val_stm_${id}">${cfg.stamina || 40}</span>)</span> <input type="range" id="stm_${id}" min="0" max="100" value="${cfg.stamina || 40}" oninput="updateStats('${id}')"></div>
-                        <div id="warn_${id}" class="pts-warning">남은 여유 포인트: ${100 - ((cfg.speed||30) + (cfg.eating||30) + (cfg.stamina||40))}</div>
+                        <div style="font-size:12px; color:#ffcc00; margin-bottom:5px;">⚙️ 스탯 수동 분배 (합산 ${maxLimit} 제한) - 미조정 시 레벨당 20pt가 랜덤 분배됨</div>
+                        <div class="stat-item"><span>🏃 속도 (<span id="val_spd_${id}">${currentSpd}</span>)</span> <input type="range" id="spd_${id}" min="0" max="${maxLimit}" value="${currentSpd}" oninput="updateStats('${id}')"></div>
+                        <div class="stat-item"><span>🐟 먹기 (<span id="val_eat_${id}">${currentEat}</span>)</span> <input type="range" id="eat_${id}" min="0" max="${maxLimit}" value="${currentEat}" oninput="updateStats('${id}')"></div>
+                        <div class="stat-item"><span>❤️ 추가체력 (<span id="val_stm_${id}">${currentStm}</span>)</span> <input type="range" id="stm_${id}" min="0" max="${maxLimit}" value="${currentStm}" oninput="updateStats('${id}')"></div>
+                        <div id="warn_${id}" class="pts-warning" style="color: ${remaining < 0 ? '#ff3333' : '#00ff00'}">${remaining < 0 ? `⚠️ 포인트 초과! (${currentSpd+currentEat+currentStm}/${maxLimit}) 저장이 거부됩니다.` : `남은 여유 포인트: ${remaining}`}</div>
                     </div>
 
                     <div class="anim-tools">
@@ -561,19 +572,32 @@
                 const eat = parseInt(document.getElementById(`eat_${id}`).value) || 0;
                 const stm = parseInt(document.getElementById(`stm_${id}`).value) || 0;
                 
-                if(spd + eat + stm > 100) {
-                    customAlert(`[${config.selectedCats[id].meta.name}] 스탯 합계가 100을 초과했습니다. 저장이 거부됩니다.`);
+                const state = catStates[id];
+                // [수정] 레벨업에 따른 동적 최대 스탯 검증 로직 반영
+                const maxLimit = state ? 100 + (state.level - 1) * 20 : 100;
+
+                if(spd + eat + stm > maxLimit) {
+                    customAlert(`[${config.selectedCats[id].meta.name}] 스탯 합계가 ${maxLimit}을 초과했습니다. 저장이 거부됩니다.`);
                     hasError = true;
                 } else {
-                    config.selectedCats[id].speed = spd;
-                    config.selectedCats[id].eating = eat;
-                    config.selectedCats[id].stamina = stm;
-
-                    if(catStates[id]) {
-                        catStates[id].speed = spd;
-                        catStates[id].eating = eat;
-                        catStates[id].maxHp = 100 + stm + ((catStates[id].level - 1) * 20); 
-                        catStates[id].hp = Math.min(catStates[id].hp, catStates[id].maxHp);
+                    if (state) {
+                        // 게임 진행 중일 경우 현재 스탯에 수동 증감 조절 반영
+                        state.speed = spd;
+                        state.eating = eat;
+                        state.maxHp = 100 + stm;
+                        state.hp = Math.min(state.hp, state.maxHp);
+                        
+                        // 레벨 1일 때는 베이스 스탯(cfg)도 함께 업데이트
+                        if (state.level === 1) {
+                            config.selectedCats[id].speed = spd;
+                            config.selectedCats[id].eating = eat;
+                            config.selectedCats[id].stamina = stm;
+                        }
+                    } else {
+                        // 게임 시작 전엔 기본 100제한 설정값(cfg) 저장
+                        config.selectedCats[id].speed = spd;
+                        config.selectedCats[id].eating = eat;
+                        config.selectedCats[id].stamina = stm;
                     }
                 }
             });
@@ -763,6 +787,7 @@
                             this.stateData.level++;
                             this.stateData.exp -= reqExp;
                             
+                            // [기존유지] 마스터가 수동 재조정을 안 할 때는 기존 로직처럼 랜덤 추가 분배됨
                             for(let i=0; i<20; i++) {
                                 let r = Math.floor(Math.random() * 3);
                                 if(r === 0) this.stateData.speed += 1;
