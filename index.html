@@ -1012,7 +1012,7 @@
                         for(let m of config.mappings) {
                             const minC = parseInt(m.minCoin);
                             const maxC = parseInt(m.maxCoin);
-                            let 개Matched = true;
+                            let coinMatched = true;
                             
                             if (!isNaN(minC) && coinValue < minC) coinMatched = false;
                             if (!isNaN(maxC) && coinValue > maxC) coinMatched = false;
