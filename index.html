@@ -215,10 +215,7 @@
             if(db[name]) {
                 currentUser = name;
                 
-                // [핵심 수정 구간] 
-                // 기존에는 로컬에 저장된 과거의 config가 외부 JSON을 강제 덮어쓰기 하도록 되어 있었습니다.
-                // 이 부분을 삭제하여 master_config.json 이 시스템의 유일한 진실 공급원이 되게 만듭니다.
-                // config = db[name].config; (삭제됨)
+                // [핵심 수정] 로컬에 저장된 과거 config 덮어쓰기 로직 삭제 (master_config.json 단일 진실 공급원 유지)
                 
                 catStates = db[name].catStates;
                 
