@@ -1,0 +1,16 @@
+{
+  "mappings": [
+    { "id": "m1", "keys": "멸치", "minCoin": "", "maxCoin": "9", "pt": 1, "image": "./images/m1_fish.png", "fileName": "m1_fish.png" },
+    { "id": "m2", "keys": "참치캔", "minCoin": "10", "maxCoin": "99", "pt": 15, "image": "./images/m2_can.png", "fileName": "m2_can.png" },
+    { "id": "m3", "keys": "츄르", "minCoin": "100", "maxCoin": "999", "pt": 30, "image": "./images/m3_snack.png", "fileName": "m3_snack.png" },
+    { "id": "m4", "keys": "연어", "minCoin": "1000", "maxCoin": "9", "pt": 50, "image": "./images/m4_salmon.png", "fileName": "m4_salmon.png" }
+  ],
+  "wsUrl": "wss://console-frown-remake.ngrok-free.dev",
+  "selectedCats": {
+    "calico": { "active": true, "speed": 30, "eating": 30, "stamina": 40, "anims": { "IDLE": "./images/calico_idle.gif", "MOVE": "./images/calico_move.gif", "EATING": "./images/calico_eat.gif", "SLEEPING": "./images/calico_sleep.gif" }, "meta": { "name": "삼색고양이" } },
+    "cheese": { "active": true, "speed": 20, "eating": 40, "stamina": 40, "anims": { "IDLE": "./images/cheese_idle.gif", "MOVE": "./images/cheese_move.gif", "EATING": "./images/cheese_eat.gif", "SLEEPING": "./images/cheese_sleep.gif" }, "meta": { "name": "치즈고양이" } },
+    "black":  { "active": true, "speed": 33, "eating": 33, "stamina": 34, "anims": { "IDLE": "./images/black_idle.gif", "MOVE": "./images/black_move.gif", "EATING": "./images/black_eat.gif", "SLEEPING": "./images/black_sleep.gif" }, "meta": { "name": "검은고양이" } },
+    "blue":   { "active": true, "speed": 50, "eating": 20, "stamina": 30, "anims": { "IDLE": "./images/blue_idle.gif", "MOVE": "./images/blue_move.gif", "EATING": "./images/blue_eat.gif", "SLEEPING": "./images/blue_sleep.gif" }, "meta": { "name": "러시안블루" } },
+    "white":  { "active": true, "speed": 20, "eating": 50, "stamina": 30, "anims": { "IDLE": "./images/white_idle.gif", "MOVE": "./images/white_move.gif", "EATING": "./images/white_eat.gif", "SLEEPING": "./images/white_sleep.gif" }, "meta": { "name": "흰고양이" } }
+  }
+}
