@@ -214,9 +214,30 @@
             let db = JSON.parse(localStorage.getItem('catGameDB')) || {};
             if(db[name]) {
                 currentUser = name;
-                config = db[name].config;
-                config.mappings.forEach(m => { m.pt = Number(m.pt) || 10; });
+                
+                // [핵심 수정 구간] 
+                // 기존에는 로컬에 저장된 과거의 config가 외부 JSON을 강제 덮어쓰기 하도록 되어 있었습니다.
+                // 이 부분을 삭제하여 master_config.json 이 시스템의 유일한 진실 공급원이 되게 만듭니다.
+                // config = db[name].config; (삭제됨)
+                
                 catStates = db[name].catStates;
+                
+                // [안전망 추가] 마스터 JSON에 새롭게 추가된 고양이가 기존 유저의 로컬 state에 없을 경우 생성
+                Object.keys(config.selectedCats).forEach(id => {
+                    if(config.selectedCats[id].active && !catStates[id]) {
+                        const cfg = config.selectedCats[id];
+                        catStates[id] = {
+                            name: cfg.meta.name || '새 고양이',
+                            level: 1,
+                            exp: 0,
+                            speed: cfg.speed || 30,
+                            eating: cfg.eating || 30,
+                            maxHp: 100 + (cfg.stamina || 40),
+                            hp: 100 + (cfg.stamina || 40)
+                        };
+                    }
+                });
+
                 document.getElementById('start-overlay').style.display = 'none';
                 resumeGame();
             } else {
@@ -417,7 +438,6 @@
             document.getElementById(`val_stm_${id}`).innerText = stm;
 
             const state = catStates[id];
-            // [수정] 레벨업에 따른 동적 최대 스탯 한계치 적용
             const maxLimit = state ? 100 + (state.level - 1) * 20 : 100;
 
             const warn = document.getElementById(`warn_${id}`);
@@ -438,7 +458,6 @@
                 const cfg = config.selectedCats[id];
                 const state = catStates[id];
                 
-                // [수정] 게임 진행 중(state 존재)이면 현재 랜덤 적용된 스탯을, 시작 전이면 기본 스탯을 표시
                 const maxLimit = state ? 100 + (state.level - 1) * 20 : 100;
                 const currentSpd = state ? state.speed : (cfg.speed || 30);
                 const currentEat = state ? state.eating : (cfg.eating || 30);
@@ -573,7 +592,6 @@
                 const stm = parseInt(document.getElementById(`stm_${id}`).value) || 0;
                 
                 const state = catStates[id];
-                // [수정] 레벨업에 따른 동적 최대 스탯 검증 로직 반영
                 const maxLimit = state ? 100 + (state.level - 1) * 20 : 100;
 
                 if(spd + eat + stm > maxLimit) {
@@ -581,20 +599,17 @@
                     hasError = true;
                 } else {
                     if (state) {
-                        // 게임 진행 중일 경우 현재 스탯에 수동 증감 조절 반영
                         state.speed = spd;
                         state.eating = eat;
                         state.maxHp = 100 + stm;
                         state.hp = Math.min(state.hp, state.maxHp);
                         
-                        // 레벨 1일 때는 베이스 스탯(cfg)도 함께 업데이트
                         if (state.level === 1) {
                             config.selectedCats[id].speed = spd;
                             config.selectedCats[id].eating = eat;
                             config.selectedCats[id].stamina = stm;
                         }
                     } else {
-                        // 게임 시작 전엔 기본 100제한 설정값(cfg) 저장
                         config.selectedCats[id].speed = spd;
                         config.selectedCats[id].eating = eat;
                         config.selectedCats[id].stamina = stm;
@@ -787,7 +802,6 @@
                             this.stateData.level++;
                             this.stateData.exp -= reqExp;
                             
-                            // [기존유지] 마스터가 수동 재조정을 안 할 때는 기존 로직처럼 랜덤 추가 분배됨
                             for(let i=0; i<20; i++) {
                                 let r = Math.floor(Math.random() * 3);
                                 if(r === 0) this.stateData.speed += 1;
@@ -822,7 +836,6 @@
                     this.domElement.style.transform = `translate(-50%, -100%) scaleX(${this.direction})`;
                 } else {
                     this.domElement.style.display = 'none';
-                    // 레거시 Canvas 픽셀 렌더링 엔진 완전 삭제 완료
                 }
 
                 const levelText = `LV${this.stateData.level}. ${this.stateData.name}`;
