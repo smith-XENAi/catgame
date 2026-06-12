@@ -33,7 +33,7 @@
       "maxCoin": "9", 
       "pt": 50, 
       "image": "./images/m4_salmon.png", 
-      "fileName": "m4_salmon.png"
+      "fileName": "m4_salmon.gif"
     }
   ],
   "wsUrl": "wss://console-frown-remake.ngrok-free.dev",
