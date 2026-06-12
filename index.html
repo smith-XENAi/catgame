@@ -176,15 +176,31 @@
         }
         function closeSysMsg() { document.getElementById('sys-msg-overlay').style.display = 'none'; }
 
-        function loadMasterConfig() {
+        // [수정] 외부 JSON 파일을 비동기로 읽어와 최우선으로 덮어쓰도록 로직 개편
+        async function loadMasterConfig() {
+            let externalConfig = null;
+            try {
+                // 브라우저 캐시를 무시하고 깃허브의 최신 스펙을 항상 가져오도록 타임스탬프 추가
+                const response = await fetch('./master_config.json?t=' + new Date().getTime());
+                if (response.ok) {
+                    externalConfig = await response.json();
+                }
+            } catch (e) {
+                console.log("외부 설정 파일이 없거나 로드 실패, 로컬/기본값 사용");
+            }
+
             let saved = localStorage.getItem('catGameMasterConfig');
-            if(saved) {
+            
+            if (externalConfig) {
+                config = externalConfig;
+                localStorage.setItem('catGameMasterConfig', JSON.stringify(config));
+            } else if (saved) {
                 config = JSON.parse(saved);
                 config.mappings.forEach(m => { m.pt = Number(m.pt) || 10; });
             } else {
                 config = { 
                     mappings: JSON.parse(JSON.stringify(defaultMappings)), 
-                    wsUrl: "ws://127.0.0.1:8010", 
+                    wsUrl: "wss://console-frown-remake.ngrok-free.dev", 
                     selectedCats: {
                         'calico': { active: true, speed: 30, eating: 30, stamina: 40, anims: {}, meta: {name: '삼색고양이'} },
                         'cheese': { active: true, speed: 20, eating: 40, stamina: 40, anims: {}, meta: {name: '치즈고양이'} },
@@ -195,7 +211,6 @@
                 };
             }
         }
-        loadMasterConfig(); 
 
         /* =========================================================================
            2. 로컬 DB 시뮬레이터 연동
@@ -1027,8 +1042,11 @@
             };
         }
 
-        // 구동 준비
-        renderEngine();
+        // [수정] 구동 준비: 비동기로 스펙 설정 파일을 먼저 로드한 뒤 렌더 엔진 시작
+        (async function initSystem() {
+            await loadMasterConfig();
+            renderEngine();
+        })();
 
     </script>
 </body>
