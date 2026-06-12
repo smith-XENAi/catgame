@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>고양이 도트 육성 게임</title>
+    <style>
+        /* 기본 레이아웃 및 캔버스 */
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; position: relative; z-index: 60; pointer-events: none; }
+        
+        /* 은닉된 상태등 및 외부 저장 버튼 */
+        #connection-status { position: absolute; top: 15px; right: 15px; font-size: 14px; color: #00ff00; z-index: 100; text-shadow: 1px 1px 0 #000; cursor: pointer; pointer-events: auto; font-weight: bold; }
+        #connection-status:hover { opacity: 0.7; }
+        
+        #external-save-btn {
+            display: none; position: absolute; top: 15px; left: 15px; z-index: 100; pointer-events: auto;
+            background: #0055aa; color: white; padding: 10px 15px; border-radius: 8px;
+            border: 2px solid #555; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        }
+        #external-save-btn:hover { background: #0077ff; }
+
+        /* 시작 대화창 모달 */
+        #start-overlay { display: flex; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center; pointer-events: auto; flex-direction: column; }
+        .start-box { background: #222; color: #fff; width: 500px; padding: 30px; border-radius: 12px; border: 3px solid #ffcc00; text-align: center; }
+        .start-box input[type="text"] { width: 80%; padding: 12px; font-size: 16px; margin-bottom: 20px; border-radius: 6px; border: 1px solid #555; background: #111; color: #fff; text-align: center; }
+        .start-btn { padding: 12px 25px; font-size: 16px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; margin: 5px; }
+        .btn-load { background: #0055aa; color: white; }
+        .btn-new { background: #aa5500; color: white; }
+        #new-game-setup { display: none; margin-top: 25px; border-top: 2px solid #444; padding-top: 20px; text-align: left; }
+        .roster-select-row { background: #333; padding: 10px; margin-bottom: 8px; border-radius: 6px; display: flex; align-items: center; gap: 10px; }
+
+        /* 설정 팝업 모달 */
+        #modal-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; pointer-events: auto; }
+        .modal-box { background: #222; color: #fff; width: 700px; max-height: 90vh; border-radius: 12px; border: 4px solid #fff; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        .modal-header { font-size: 24px; font-weight: bold; border-bottom: 2px solid #555; padding-bottom: 10px; display: flex; justify-content: space-between; }
+        .close-btn { cursor: pointer; color: #ff5555; }
+        
+        .cat-row { background: #333; padding: 15px; border-radius: 8px; border: 2px solid #444; margin-bottom: 10px; }
+        .cat-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-weight: bold; font-size: 18px; color: #00ffcc; }
+        
+        .stat-group { display: flex; flex-direction: column; gap: 8px; background: #1a1a1a; padding: 12px; border-radius: 6px; border: 1px solid #444; margin-bottom: 10px; }
+        .stat-item { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+        .stat-item input[type=range] { width: 60%; }
+        .pts-warning { color: #00ff00; font-size: 11px; margin-top: 5px; text-align: right; font-weight:bold; }
+
+        .mapping-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; background: #2a2a2a; padding: 15px; border-radius: 8px; border: 1px solid #444; }
+        .mapping-row input { padding: 6px; border-radius: 4px; border: 1px solid #555; background: #111; color: #fff; }
+        .mapping-group { display: flex; flex-direction: column; gap: 4px; }
+        .mapping-label { font-size: 12px; color: #aaa; }
+        
+        .btn-add, .btn-remove { background: #555; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        .btn-save { background: #00aa00; color: white; font-size: 18px; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        .btn-save:hover { background: #00dd00; }
+        
+        .sim-controls { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+        .btn-sim { background: #444; color: #fff; border: 1px solid #666; padding: 8px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .btn-sim-auto { background: #555; color: #fff; width: 100%; padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top:5px; }
+        .anim-tools { background: #111; padding: 10px; border-radius: 6px; font-size: 12px; display: flex; flex-direction: column; gap: 8px; border: 1px solid #333; }
+        
+        /* 파일명 표시용 스타일 */
+        .file-name-display { font-size: 10px; color: #ffcc00; max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <div id="connection-status" onclick="openModal()">🟢 대기중</div>
+    <button id="external-save-btn" onclick="exitGame()">💾 저장 및 메인으로</button>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 중앙 시작 대화창 -->
+    <div id="start-overlay">
+        <div class="start-box">
+            <h2 style="color:#00ffcc; margin-top:0;">🐈 고양이 도트 육성 시스템</h2>
+            <p style="font-size:13px; color:#aaa;">데이터 저장을 위한 사용자 이름을 입력하세요.</p>
+            <input type="text" id="start-username" name="catgame_username_no_autocomplete" autocomplete="off" spellcheck="false" data-lpignore="true" placeholder="등록자 이름 입력">
+            <div>
+                <button class="start-btn btn-load" onclick="dbLoadGame()">이어하기</button>
+                <button class="start-btn btn-new" onclick="dbNewGame()">새로시작</button>
+            </div>
+            
+            <div id="new-game-setup">
+                <h3 style="color:#ffcc00; margin-top:0;">출전 고양이 선택 (최대 3마리)</h3>
+                <div id="start-cat-list"></div>
+                <button onclick="dbStartGame()" style="background:#00aa00; color:#fff; border:none; padding:12px 20px; border-radius:6px; font-size:16px; cursor:pointer; width:100%; margin-top:15px; font-weight:bold;">게임 시작</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 설정 모달창 -->
+    <div id="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>⚙️ 시스템 제어 콘솔</span>
+                <span class="close-btn" onclick="closeModal()">✖</span>
+            </div>
+            
+            <div id="roster-section">
+                <h3>1. 고양이 로스터 및 애니메이션 등록</h3>
+                <p style="font-size:12px; color:#ffcc00;">※ 마스터가 설정하고 저장한 스탯은 시스템의 '절대 기본값(하드코딩)'으로 영구 고정됩니다.</p>
+                <div id="cat-anim-list"></div>
+            </div>
+
+            <div id="mapping-section">
+                <h3>2. 먹이 발동 조건 및 포인트 설정</h3>
+                <!-- [수정] 키워드 관련 안내 문구 삭제, 코인 범위로만 안내 -->
+                <p style="font-size:12px; color:#aaa; margin-top:-10px;">코인 범위 만족 시 발동. 이미지는 최대 100px로 렌더링되며 우측부터 지워집니다.</p>
+                <div id="mapping-list"></div>
+                <button class="btn-add" onclick="addMappingRow()">➕ 슬롯 추가</button>
+            </div>
+
+            <div id="connection-section">
+                <h3>3. 코어 연결망 (WebSocket URL)</h3>
+                <input type="text" id="ws-url" value="ws://127.0.0.1:8010" style="width: 100%; padding:10px; border-radius:5px; border:none; background:#111; color:#fff;" autocomplete="off">
+            </div>
+
+            <div id="simulator-section">
+                <h3 style="color: #ff99ff;">🕹️ 단독 플레이 시뮬레이터</h3>
+                <div class="sim-controls" id="sim-btn-group"></div>
+                <button class="btn-sim-auto" id="auto-btn" onclick="toggleAutoPlay()">🤖 가상 시청자 봇 가동 (랜덤 자동 투하)</button>
+            </div>
+
+            <button class="btn-save" onclick="saveSettings()">💾 시스템 스탯 고정 및 닫기</button>
+        </div>
+    </div>
+
+    <!-- 커스텀 모달 UI -->
+    <div id="sys-msg-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; pointer-events:auto;">
+        <div style="background:#222; border:2px solid #ff3333; padding:20px; border-radius:8px; color:#fff; text-align:center; min-width:300px; max-width:80%;">
+            <p id="sys-msg-text" style="font-size:16px; margin-bottom:20px; line-height:1.4; word-break:keep-all;"></p>
+            <div id="sys-msg-btns" style="display:flex; justify-content:center; gap:10px;"></div>
+        </div>
+    </div>
+
+    <script>
+        /* =========================================================================
+           1. 게임 데이터베이스 및 글로벌 설정
+        ========================================================================= */
+        const PIXEL_SIZE = 6;
+        
+        const defaultMappings = [
+            { id: 'm1', keys: "멸치,1", minCoin: "", maxCoin: "9", pt: 1, image: "", fileName: "" },
+            { id: 'm2', keys: "참치,캔", minCoin: "10", maxCoin: "99", pt: 15, image: "", fileName: "" },
+            { id: 'm3', keys: "츄르,간식", minCoin: "100", maxCoin: "999", pt: 30, image: "", fileName: "" },
+            { id: 'm4', keys: "연어,황금", minCoin: "1000", maxCoin: "", pt: 50, image: "", fileName: "" }
+        ];
+
+        let cats = []; 
+        let foods = []; 
+        let floatTexts = [];
+        
+        let currentUser = "";
+        let config = {}; 
+        let catStates = {}; 
+        let ws = null; 
+        let mappingImageCache = {};
+
+        // 브라우저 기본 alert, confirm 대체
+        let confirmCallback = null;
+        function customAlert(msg) {
+            document.getElementById('sys-msg-text').innerText = msg;
+            document.getElementById('sys-msg-btns').innerHTML = '<button onclick="closeSysMsg()" style="background:#555; color:#fff; border:none; padding:8px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">확인</button>';
+            document.getElementById('sys-msg-overlay').style.display = 'flex';
+        }
+        function customConfirm(msg, callback) {
+            document.getElementById('sys-msg-text').innerText = msg;
+            document.getElementById('sys-msg-btns').innerHTML = `
+                <button onclick="executeConfirm(true)" style="background:#aa0000; color:#fff; border:none; padding:8px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">예 (삭제)</button>
+                <button onclick="executeConfirm(false)" style="background:#555; color:#fff; border:none; padding:8px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">아니오</button>
+            `;
+            confirmCallback = callback;
+            document.getElementById('sys-msg-overlay').style.display = 'flex';
+        }
+        function executeConfirm(result) {
+            closeSysMsg();
+            if(confirmCallback) confirmCallback(result);
+        }
+        function closeSysMsg() { document.getElementById('sys-msg-overlay').style.display = 'none'; }
+
+        function loadMasterConfig() {
+            let saved = localStorage.getItem('catGameMasterConfig');
+            if(saved) {
+                config = JSON.parse(saved);
+                config.mappings.forEach(m => { m.pt = Number(m.pt) || 10; });
+            } else {
+                config = { 
+                    mappings: JSON.parse(JSON.stringify(defaultMappings)), 
+                    wsUrl: "ws://127.0.0.1:8010", 
+                    selectedCats: {
+                        'calico': { active: true, speed: 30, eating: 30, stamina: 40, anims: {}, meta: {name: '삼색고양이'} },
+                        'cheese': { active: true, speed: 20, eating: 40, stamina: 40, anims: {}, meta: {name: '치즈고양이'} },
+                        'black':  { active: true, speed: 33, eating: 33, stamina: 34, anims: {}, meta: {name: '검은고양이'} },
+                        'blue':   { active: true, speed: 50, eating: 20, stamina: 30, anims: {}, meta: {name: '러시안블루'} },
+                        'white':  { active: true, speed: 20, eating: 50, stamina: 30, anims: {}, meta: {name: '흰고양이'} }
+                    } 
+                };
+            }
+        }
+        loadMasterConfig(); 
+
+        /* =========================================================================
+           2. 로컬 DB 시뮬레이터 연동
+        ========================================================================= */
+        function checkUserExist() {
+            const name = document.getElementById('start-username').value.trim();
+            if(!name) { customAlert("데이터베이스 식별을 위해 이름을 입력해주세요."); return false; }
+            return name;
+        }
+
+        function dbLoadGame() {
+            const name = checkUserExist();
+            if(!name) return;
+            let db = JSON.parse(localStorage.getItem('catGameDB')) || {};
+            if(db[name]) {
+                currentUser = name;
+                config = db[name].config;
+                config.mappings.forEach(m => { m.pt = Number(m.pt) || 10; });
+                catStates = db[name].catStates;
+                document.getElementById('start-overlay').style.display = 'none';
+                resumeGame();
+            } else {
+                customAlert("존재하지 않는 이름입니다. [새로시작]을 통해 프로필을 생성하세요.");
+            }
+        }
+
+        function dbNewGame() {
+            const name = checkUserExist();
+            if(!name) return;
+            currentUser = name;
+            
+            let html = '';
+            Object.keys(config.selectedCats).forEach(id => {
+                const cfg = config.selectedCats[id];
+                html += `
+                <div class="roster-select-row">
+                    <input type="checkbox" class="new-cat-chk" value="${id}" onchange="limitNewCats(this)">
+                    <input type="text" id="new-cat-name-${id}" value="${cfg.meta.name}" style="padding:5px; border-radius:4px; border:none; width:120px;" autocomplete="off">
+                    <span style="font-size:11px; color:#aaa;">(속도:${cfg.speed} 먹기:${cfg.eating} 체력:${100 + cfg.stamina})</span>
+                </div>`;
+            });
+            document.getElementById('start-cat-list').innerHTML = html;
+            document.getElementById('new-game-setup').style.display = 'block';
+        }
+
+        function limitNewCats(chk) {
+            if(document.querySelectorAll('.new-cat-chk:checked').length > 3) {
+                chk.checked = false;
+                customAlert("최대 3마리까지만 출전 가능합니다.");
+            }
+        }
+
+        function dbStartGame() {
+            const checks = document.querySelectorAll('.new-cat-chk:checked');
+            if(checks.length === 0) { customAlert("최소 1마리를 선택해야 합니다."); return; }
+            
+            catStates = {};
+            
+            checks.forEach(chk => {
+                const id = chk.value;
+                const cfg = config.selectedCats[id];
+                const customName = document.getElementById(`new-cat-name-${id}`).value || cfg.meta.name;
+                
+                cfg.active = true;
+                cfg.meta.name = customName;
+
+                catStates[id] = {
+                    name: customName,
+                    level: 1,
+                    exp: 0,
+                    speed: cfg.speed,
+                    eating: cfg.eating,
+                    maxHp: 100 + cfg.stamina,
+                    hp: 100 + cfg.stamina
+                };
+            });
+            
+            Object.keys(config.selectedCats).forEach(id => {
+                if(!catStates[id]) config.selectedCats[id].active = false;
+            });
+            
+            saveToDB();
+            document.getElementById('start-overlay').style.display = 'none';
+            resumeGame();
+        }
+
+        function saveToDB() {
+            if(!currentUser) return;
+            let db = JSON.parse(localStorage.getItem('catGameDB')) || {};
+            db[currentUser] = { config, catStates };
+            try {
+                localStorage.setItem('catGameDB', JSON.stringify(db));
+                localStorage.setItem('catGameMasterConfig', JSON.stringify(config));
+            } catch(e) {
+                if(!window.quotaAlerted) {
+                    customAlert('⚠️ 용량 한도 초과: 등록하신 GIF 이미지가 너무 큽니다. 데이터가 온전히 저장되지 않을 수 있습니다.');
+                    window.quotaAlerted = true;
+                }
+            }
+        }
+
+        function exitGame() {
+            saveToDB();
+            cats.forEach(c => c.domElement.remove());
+            cats = [];
+            foods = [];
+            if(ws) { ws.onclose = null; ws.close(); ws = null; }
+            closeModal();
+            document.getElementById('new-game-setup').style.display = 'none';
+            document.getElementById('start-overlay').style.display = 'flex';
+            document.getElementById('external-save-btn').style.display = 'none';
+            document.getElementById('connection-status').innerText = '🟢 대기중';
+        }
+
+        function resumeGame() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // [수정] 외부 시청자가 URL 클릭만으로 100% 자동 연결되도록 파라미터 감지기 추가
+            const wsParam = urlParams.get('ws');
+            if (wsParam) {
+                config.wsUrl = wsParam;
+            } else {
+                const urlPort = urlParams.get('port');
+                if (urlPort) config.wsUrl = `ws://127.0.0.1:${urlPort}`;
+            }
+            
+            // 이미지 강제 캐싱 재구동
+            mappingImageCache = {};
+            config.mappings.forEach(m => {
+                if(m.image) {
+                    let img = new Image();
+                    img.src = m.image;
+                    mappingImageCache[m.id] = img;
+                }
+            });
+
+            document.getElementById('external-save-btn').style.display = 'block';
+            spawnCats();
+            initWebSocket();
+        }
+
+        /* =========================================================================
+           3. 설정 모달창
+        ========================================================================= */
+        const modal = document.getElementById('modal-overlay');
+        function openModal() {
+            if(!currentUser) return; 
+            renderModal();
+            modal.style.display = 'flex';
+        }
+        function closeModal() { modal.style.display = 'none'; }
+
+        function addNewCat() {
+            const newId = 'custom_' + Date.now();
+            const defaultName = '새 고양이';
+            const fixedSpeed = 30;
+            const fixedEating = 30;
+            const fixedStamina = 40;
+
+            const meta = { name: defaultName, cBase: '#ffffff', cSpot1: '#cccccc', cSpot2: '#999999' };
+            
+            config.selectedCats[newId] = { active: false, speed: fixedSpeed, eating: fixedEating, stamina: fixedStamina, anims: {}, meta: meta };
+            catStates[newId] = {
+                name: defaultName,
+                level: 1,
+                exp: 0,
+                speed: fixedSpeed,
+                eating: fixedEating,
+                maxHp: 100 + fixedStamina,
+                hp: 100 + fixedStamina
+            };
+            
+            saveToDB();
+            renderModal();
+        }
+
+        function toggleCatActive(id, isActive) {
+            const activeCount = Object.values(config.selectedCats).filter(c => c.active).length;
+            if (isActive && activeCount >= 3) {
+                customAlert("최대 3마리까지만 출전 가능합니다.");
+                document.getElementById(`chk_${id}`).checked = false;
+                return;
+            }
+            config.selectedCats[id].active = isActive;
+            saveToDB();
+            spawnCats();
+        }
+
+        function updateCatName(id, newName) {
+            if(catStates[id]) catStates[id].name = newName;
+            if(config.selectedCats[id] && config.selectedCats[id].meta) config.selectedCats[id].meta.name = newName;
+            saveToDB();
+        }
+
+        // [수정] 기본 고양이 포함 '모든 고양이'를 삭제할 수 있도록 제한 해제 및 방어 코드 추가
+        function deleteCat(id) {
+            if(Object.keys(config.selectedCats).length <= 1) {
+                customAlert("최소 1마리의 고양이는 시스템에 남아있어야 합니다.");
+                return;
+            }
+            customConfirm("이 고양이를 명단에서 완전히 삭제하시겠습니까? (복구 불가)", function(result) {
+                if(result) {
+                    delete config.selectedCats[id];
+                    if(catStates[id]) delete catStates[id];
+                    saveToDB();
+                    renderModal();
+                    spawnCats();
+                }
+            });
+        }
+
+        function updateStats(id) {
+            const spd = parseInt(document.getElementById(`spd_${id}`).value) || 0;
+            const eat = parseInt(document.getElementById(`eat_${id}`).value) || 0;
+            const stm = parseInt(document.getElementById(`stm_${id}`).value) || 0;
+            const total = spd + eat + stm;
+            
+            document.getElementById(`val_spd_${id}`).innerText = spd;
+            document.getElementById(`val_eat_${id}`).innerText = eat;
+            document.getElementById(`val_stm_${id}`).innerText = stm;
+
+            const warn = document.getElementById(`warn_${id}`);
+            if(total > 100) {
+                warn.innerText = `⚠️ 포인트 초과! (${total}/100) 저장이 거부됩니다.`;
+                warn.style.color = '#ff3333';
+            } else {
+                warn.innerText = `남은 여유 포인트: ${100 - total}`;
+                warn.style.color = '#00ff00';
+            }
+        }
+
+        function renderModal() {
+            const rosterDiv = document.getElementById('cat-anim-list');
+            rosterDiv.innerHTML = '<button onclick="addNewCat()" style="background:#0055aa; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; margin-bottom:15px; font-weight:bold;">➕ 새 고양이 추가</button>';
+            
+            Object.keys(config.selectedCats).forEach(id => {
+                const cfg = config.selectedCats[id];
+                const state = catStates[id];
+                
+                rosterDiv.innerHTML += `
+                <div class="cat-row">
+                    <div class="cat-header">
+                        <input type="checkbox" id="chk_${id}" ${cfg.active ? 'checked' : ''} onchange="toggleCatActive('${id}', this.checked)">
+                        <input type="text" id="name_${id}" value="${state ? state.name : cfg.meta.name}" onchange="updateCatName('${id}', this.value)" style="background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:4px; font-weight:bold; width:120px;" autocomplete="off">
+                        <span style="color:#fff; font-size:13px; margin-left:5px;">(Lv.${state ? state.level : 1} | 누적 포인트: ${state ? Math.floor(state.exp) : 0} / ${state ? 100 + ((state.level - 1) * 200) : 100})</span>
+                        <button onclick="deleteCat('${id}')" style="background:#aa0000; color:white; border:none; border-radius:4px; padding:2px 6px; font-size:12px; margin-left:10px; cursor:pointer;">삭제</button>
+                    </div>
+                    
+                    <div class="stat-group">
+                        <div style="font-size:12px; color:#ffcc00; margin-bottom:5px;">⚙️ 기본 스탯 설정 (합산 100 제한) - 시스템 기본값으로 영구 고정됩니다.</div>
+                        <div class="stat-item"><span>🏃 속도 (<span id="val_spd_${id}">${cfg.speed || 30}</span>)</span> <input type="range" id="spd_${id}" min="0" max="100" value="${cfg.speed || 30}" oninput="updateStats('${id}')"></div>
+                        <div class="stat-item"><span>🐟 먹기 (<span id="val_eat_${id}">${cfg.eating || 30}</span>)</span> <input type="range" id="eat_${id}" min="0" max="100" value="${cfg.eating || 30}" oninput="updateStats('${id}')"></div>
+                        <div class="stat-item"><span>❤️ 추가체력 (<span id="val_stm_${id}">${cfg.stamina || 40}</span>)</span> <input type="range" id="stm_${id}" min="0" max="100" value="${cfg.stamina || 40}" oninput="updateStats('${id}')"></div>
+                        <div id="warn_${id}" class="pts-warning">남은 여유 포인트: ${100 - ((cfg.speed||30) + (cfg.eating||30) + (cfg.stamina||40))}</div>
+                    </div>
+
+                    <div class="anim-tools">
+                        <div style="display:flex; justify-content:space-between;"><span>대기(IDLE)</span> <input type="file" accept="image/*" onchange="uploadAnim(this, '${id}', 'IDLE')"> <span>${cfg.anims.IDLE?'✔️':''}</span></div>
+                        <div style="display:flex; justify-content:space-between;"><span>이동(MOVE)</span> <input type="file" accept="image/*" onchange="uploadAnim(this, '${id}', 'MOVE')"> <span>${cfg.anims.MOVE?'✔️':''}</span></div>
+                        <div style="display:flex; justify-content:space-between;"><span>먹기(EAT)</span> <input type="file" accept="image/*" onchange="uploadAnim(this, '${id}', 'EATING')"> <span>${cfg.anims.EATING?'✔️':''}</span></div>
+                        <div style="display:flex; justify-content:space-between; color:#aaaaff;"><span>잠자기(SLEEP)</span> <input type="file" accept="image/*" onchange="uploadAnim(this, '${id}', 'SLEEPING')"> <span>${cfg.anims.SLEEPING?'✔️':''}</span></div>
+                    </div>
+                </div>`;
+            });
+
+            const mapList = document.getElementById('mapping-list');
+            mapList.innerHTML = '';
+            config.mappings.forEach(m => addMappingRow(m));
+
+            const simGroup = document.getElementById('sim-btn-group');
+            simGroup.innerHTML = '';
+            config.mappings.forEach((m, idx) => {
+                simGroup.innerHTML += `<button class="btn-sim" onclick="spawnSimulatorFood(${idx})">투하 (${m.pt}pt)</button>`;
+            });
+
+            document.getElementById('ws-url').value = config.wsUrl;
+        }
+
+        function uploadAnim(inputElem, catId, stateName) {
+            const file = inputElem.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                config.selectedCats[catId].anims[stateName] = e.target.result;
+                saveToDB(); renderModal(); spawnCats(); 
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function addMappingRow(m = null) {
+            if(!m) {
+                m = { id: 'm_' + Date.now(), keys: '', minCoin: '', maxCoin: '', pt: 10, image: '', fileName: '' };
+                config.mappings.push(m);
+            }
+            const list = document.getElementById('mapping-list');
+            const div = document.createElement('div');
+            div.className = 'mapping-row';
+            div.id = `map-row-${m.id}`;
+            div.innerHTML = `
+                <div class="mapping-group" style="flex:2;">
+                    <!-- [수정] 키워드를 먹이 이름으로 변경 -->
+                    <span class="mapping-label">먹이 이름</span>
+                    <input type="text" id="keys-${m.id}" value="${m.keys}" placeholder="예: 멸치" autocomplete="off">
+                </div>
+                <div class="mapping-group" style="flex:1;">
+                    <span class="mapping-label">코인조건(이상~이하)</span>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <input type="number" id="min-${m.id}" value="${m.minCoin}" style="width:50px;">~
+                        <input type="number" id="max-${m.id}" value="${m.maxCoin}" style="width:50px;">
+                    </div>
+                </div>
+                <div class="mapping-group" style="flex:0.5;">
+                    <span class="mapping-label">포인트(경험치)</span>
+                    <input type="number" id="pt-${m.id}" value="${m.pt}" style="width:50px;" min="1">
+                </div>
+                <div class="mapping-group" style="flex:1;">
+                    <span class="mapping-label">먹이이미지</span>
+                    <input type="file" accept="image/*" onchange="uploadMapImage(this, '${m.id}')" style="width:140px; font-size:11px;">
+                    <img id="img-${m.id}" src="${m.image}" style="max-height:30px; display:${m.image?'block':'none'}">
+                </div>
+                <div class="mapping-group" style="flex:0.5; justify-content:flex-end;">
+                    <span id="fname-${m.id}" class="file-name-display" title="${m.fileName || ''}">${m.fileName || '없음'}</span>
+                    <button class="btn-remove" onclick="removeMapping('${m.id}')" style="margin-top:5px;">❌</button>
+                </div>
+            `;
+            list.appendChild(div);
+        }
+
+        function removeMapping(mapId) {
+            config.mappings = config.mappings.filter(m => m.id !== mapId);
+            document.getElementById(`map-row-${mapId}`).remove();
+        }
+
+        function uploadMapImage(input, mapId) {
+            const file = input.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                const m = config.mappings.find(x => x.id === mapId);
+                if(m) {
+                    m.image = e.target.result;
+                    m.fileName = file.name;
+                    document.getElementById(`img-${mapId}`).src = m.image;
+                    document.getElementById(`img-${mapId}`).style.display = 'block';
+                    
+                    const fnameSpan = document.getElementById(`fname-${mapId}`);
+                    if(fnameSpan) {
+                        fnameSpan.innerText = m.fileName;
+                        fnameSpan.title = m.fileName;
+                    }
+                    
+                    let img = new Image();
+                    img.src = m.image;
+                    mappingImageCache[mapId] = img;
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function saveSettings() {
+            let hasError = false;
+            
+            Object.keys(config.selectedCats).forEach(id => {
+                const spd = parseInt(document.getElementById(`spd_${id}`).value) || 0;
+                const eat = parseInt(document.getElementById(`eat_${id}`).value) || 0;
+                const stm = parseInt(document.getElementById(`stm_${id}`).value) || 0;
+                
+                if(spd + eat + stm > 100) {
+                    customAlert(`[${config.selectedCats[id].meta.name}] 스탯 합계가 100을 초과했습니다. 저장이 거부됩니다.`);
+                    hasError = true;
+                } else {
+                    config.selectedCats[id].speed = spd;
+                    config.selectedCats[id].eating = eat;
+                    config.selectedCats[id].stamina = stm;
+
+                    if(catStates[id]) {
+                        catStates[id].speed = spd;
+                        catStates[id].eating = eat;
+                        catStates[id].maxHp = 100 + stm + ((catStates[id].level - 1) * 20); 
+                        catStates[id].hp = Math.min(catStates[id].hp, catStates[id].maxHp);
+                    }
+                }
+            });
+            if(hasError) return;
+
+            config.mappings.forEach(m => {
+                m.keys = document.getElementById(`keys-${m.id}`).value.trim();
+                m.minCoin = document.getElementById(`min-${m.id}`).value.trim();
+                m.maxCoin = document.getElementById(`max-${m.id}`).value.trim();
+                m.pt = Number(document.getElementById(`pt-${m.id}`).value) || 1;
+            });
+
+            config.wsUrl = document.getElementById('ws-url').value.trim();
+
+            saveToDB();
+            closeModal();
+            spawnCats(); 
+            initWebSocket();
+        }
+
+        let autoPlayInterval = null;
+        function spawnSimulatorFood(idx) {
+            if(config.mappings[idx]) spawnFood(config.mappings[idx], 1);
+        }
+        function toggleAutoPlay() {
+            const btn = document.getElementById('auto-btn');
+            if(autoPlayInterval) {
+                clearInterval(autoPlayInterval);
+                autoPlayInterval = null;
+                btn.innerText = "🤖 가상 시청자 봇 가동 (랜덤 자동 투하)";
+                btn.style.background = "#555";
+            } else {
+                if(config.mappings.length === 0) { customAlert("먹이 세팅을 먼저 하세요."); return; }
+                autoPlayInterval = setInterval(() => {
+                    const rMap = config.mappings[Math.floor(Math.random() * config.mappings.length)];
+                    spawnFood(rMap, 1);
+                    floatTexts.push({ text: "🎁 가상 시청자!", x: Math.random()*(canvas.width-200)+100, y: 100, life: 80, color: '#ff99ff' });
+                }, 2500);
+                btn.innerText = "🛑 가상 시청자 봇 중지";
+                btn.style.background = "#aa0000";
+            }
+        }
+
+        /* =========================================================================
+           4. 게임 물리엔진 및 렌더러
+        ========================================================================= */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // [반영] 반응형 스테이지를 위한 윈도우 사이즈 동기화 로직 (거리 비율 룰 적용)
+        let oldW = window.innerWidth;
+        let oldH = window.innerHeight;
+        
+        function resize() { 
+            const newW = window.innerWidth; 
+            const newH = window.innerHeight; 
+            
+            // 기존 고양이 및 먹이 좌표 비율에 맞춰 재조정
+            if (cats && cats.length > 0) {
+                const wRatio = oldW ? (newW / oldW) : 1;
+                cats.forEach(c => {
+                    c.x *= wRatio;
+                    c.y = newH - 100;
+                });
+            }
+            if (foods && foods.length > 0) {
+                const wRatio = oldW ? (newW / oldW) : 1;
+                foods.forEach(f => {
+                    f.x *= wRatio;
+                    if (f.isGrounded) {
+                        f.y = newH - 100; // [수정] 바닥 높이를 고양이와 동일하게 100으로 맞춤
+                    }
+                });
+            }
+
+            canvas.width = newW; 
+            canvas.height = newH; 
+            oldW = newW;
+            oldH = newH;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Cat {
+            constructor(id) {
+                this.id = id;
+                this.cfg = config.selectedCats[id];
+                this.stateData = catStates[id];
+                this.info = this.cfg.meta; 
+                
+                this.x = Math.random() * (canvas.width - 100) + 50;
+                this.y = canvas.height - 100;
+                this.state = 'IDLE'; 
+                this.tailFrame = 0;
+                this.targetFood = null;
+                this.direction = 1; 
+                this.hp = this.stateData.hp;
+
+                // [추가] 배회 타이머 (60fps 기준 100~150초 = 5분에 2~3회)
+                this.wanderTimer = Math.random() * 3000 + 6000; 
+                this.wanderX = null;
+
+                this.domElement = document.createElement('img');
+                this.domElement.style.position = 'absolute';
+                this.domElement.style.pointerEvents = 'none';
+                this.domElement.style.transform = 'translate(-50%, -100%)';
+                this.domElement.style.zIndex = '50';
+                this.domElement.style.imageRendering = 'pixelated'; 
+                this.domElement.style.display = 'none';
+                document.body.appendChild(this.domElement);
+                this.currentAnimSrc = null;
+            }
+
+            update() {
+                this.speedPerFrame = this.stateData.speed / 60;
+                this.eatPerFrame = this.stateData.eating / 60;
+
+                if (this.hp <= 0) this.state = 'SLEEPING';
+                
+                if (this.state === 'SLEEPING') {
+                    this.hp += (this.stateData.maxHp * 0.1) / 60; 
+                    if (this.hp >= this.stateData.maxHp * 0.2) {
+                        this.state = 'IDLE'; 
+                    }
+                    return; 
+                }
+
+                // [수정] 배회 상태(WANDER) 추가 및 먹이 등장 시 즉각 반응
+                let availableFoods = foods.filter(f => f.isGrounded);
+                if ((this.state === 'IDLE' || this.state === 'MOVE' || this.state === 'WANDER') && availableFoods.length > 0) {
+                    availableFoods.sort((a, b) => Math.abs(a.x - this.x) - Math.abs(b.x - this.x));
+                    this.targetFood = availableFoods[0];
+                    this.state = 'MOVE';
+                } else if (availableFoods.length === 0 && this.state === 'MOVE') {
+                    this.state = 'IDLE';
+                    this.targetFood = null;
+                }
+
+                // [추가] IDLE 상태일 때 배회 타이머 감소 및 발동
+                if (this.state === 'IDLE') {
+                    this.wanderTimer--;
+                    if (this.wanderTimer <= 0) {
+                        this.wanderX = Math.random() * (canvas.width - 100) + 50;
+                        this.state = 'WANDER';
+                        this.wanderTimer = Math.random() * 3000 + 6000; // 100~150초 리셋
+                    }
+                }
+
+                // [추가] WANDER 상태 처리 (무조건 체력 소모)
+                if (this.state === 'WANDER') {
+                    const dist = this.wanderX - this.x;
+                    if (Math.abs(dist) < 5) {
+                        this.state = 'IDLE';
+                    } else {
+                        this.direction = dist > 0 ? 1 : -1;
+                        this.x += Math.sign(dist) * this.speedPerFrame;
+                        this.hp -= 1 / 60; // 체력 소모
+                    }
+                }
+
+                if (this.state === 'MOVE' && this.targetFood) {
+                    // 목표로 하던 먹이가 사라졌거나 아직 땅에 안닿았다면 무효화
+                    if (!this.targetFood.isGrounded) {
+                        this.state = 'IDLE';
+                        this.targetFood = null;
+                    } else {
+                        const dist = this.targetFood.x - this.x;
+                        if (Math.abs(dist) < 5) {
+                            this.state = 'EATING';
+                        } else {
+                            this.direction = dist > 0 ? 1 : -1;
+                            this.x += Math.sign(dist) * this.speedPerFrame;
+                            this.hp -= 1 / 60; 
+                        }
+                    }
+                }
+
+                if (this.state === 'EATING' && this.targetFood) {
+                    if (this.targetFood.pt <= 0) {
+                        this.state = 'IDLE';
+                        this.targetFood = null;
+                    } else {
+                        let eatAmt = Math.min(this.eatPerFrame, this.targetFood.pt);
+                        this.targetFood.pt -= eatAmt;
+                        this.hp = Math.min(this.stateData.maxHp, this.hp + eatAmt);
+                        this.stateData.exp += eatAmt;
+                        this.hp -= 1 / 60; 
+
+                        this.targetFood.w = Math.max(0, (this.targetFood.pt / this.targetFood.maxPt) * 100);
+
+                        const reqExp = 100 + ((this.stateData.level - 1) * 200);
+                        if (this.stateData.exp >= reqExp) {
+                            this.stateData.level++;
+                            this.stateData.exp -= reqExp;
+                            
+                            for(let i=0; i<20; i++) {
+                                let r = Math.floor(Math.random() * 3);
+                                if(r === 0) this.stateData.speed += 1;
+                                else if(r === 1) this.stateData.eating += 1;
+                                else this.stateData.maxHp += 1;
+                            }
+                            this.hp = this.stateData.maxHp; 
+
+                            floatTexts.push({ text: "✨LEVEL UP!✨", x: this.x, y: this.y - 80, life: 100, color: '#00ffcc' });
+                        }
+                    }
+                }
+            }
+
+            draw() {
+                const anims = this.cfg.anims || {};
+                // [수정] WANDER 상태일 때 이동(MOVE) 애니메이션을 빌려씀
+                let targetAnim = anims[this.state === 'WANDER' ? 'MOVE' : this.state];
+                
+                if (!targetAnim && this.state !== 'SLEEPING') {
+                    targetAnim = anims['IDLE'] || anims['MOVE'] || anims['EATING'];
+                }
+
+                if (targetAnim) {
+                    if (this.currentAnimSrc !== targetAnim) {
+                        this.domElement.src = targetAnim;
+                        this.currentAnimSrc = targetAnim;
+                    }
+                    this.domElement.style.display = 'block';
+                    this.domElement.style.left = this.x + 'px';
+                    this.domElement.style.top = (this.y + (PIXEL_SIZE * 8)) + 'px';
+                    this.domElement.style.width = '90px'; 
+                    this.domElement.style.transform = `translate(-50%, -100%) scaleX(${this.direction})`;
+                } else {
+                    this.domElement.style.display = 'none';
+                    
+                    if(this.state !== 'SLEEPING') {
+                        ctx.save();
+                        ctx.translate(this.x, this.y);
+                        ctx.scale(this.direction, 1);
+                        ctx.translate(-this.x, -this.y);
+                        
+                        const SPRITE_CAT_BODY = [[0,1,0,0,0,0,0,1,0],[1,3,1,0,0,0,1,4,1],[1,2,2,1,1,1,2,2,1],[1,2,3,2,2,2,4,2,1],[1,2,1,2,5,2,1,2,1],[1,2,2,2,2,2,2,2,1],[0,1,3,2,2,2,4,1,0],[0,0,1,1,1,1,1,0,0]];
+                        for (let y = 0; y < SPRITE_CAT_BODY.length; y++) {
+                            for (let x = 0; x < SPRITE_CAT_BODY[y].length; x++) {
+                                const code = SPRITE_CAT_BODY[y][x];
+                                if (code !== 0) {
+                                    let color = '#000';
+                                    if(code===2) color=this.info.cBase; if(code===3) color=this.info.cSpot1; if(code===4) color=this.info.cSpot2; if(code===5) color='#ff9999';
+                                    ctx.fillStyle = color;
+                                    ctx.fillRect(this.x + (x * PIXEL_SIZE) - 20, this.y + (y * PIXEL_SIZE), PIXEL_SIZE, PIXEL_SIZE);
+                                }
+                            }
+                        }
+                        
+                        if (Date.now() % 1000 < 500) this.tailFrame = 0; else this.tailFrame = 1;
+                        const tail = this.tailFrame === 0 ? [[1,1],[1,2],[1,2],[0,1]] : [[0,1],[1,2],[1,2],[1,1]];
+                        for (let y = 0; y < tail.length; y++) {
+                            for (let x = 0; x < tail[y].length; x++) {
+                                if (tail[y][x] !== 0) {
+                                    ctx.fillStyle = tail[y][x] === 1 ? '#000' : this.info.cBase;
+                                    ctx.fillRect(this.x + (x * PIXEL_SIZE) + 30, this.y + (y * PIXEL_SIZE) + 30, PIXEL_SIZE, PIXEL_SIZE);
+                                }
+                            }
+                        }
+                        ctx.restore();
+                    }
+                }
+
+                // [수정] 텍스트, 경험치, 체력을 3줄로 수직 배치
+                const levelText = `LV${this.stateData.level}. ${this.stateData.name}`;
+                ctx.font = 'bold 15px "Courier New"';
+                const textWidth = ctx.measureText(levelText).width;
+                
+                const barWidth = 50; // 게이지 넓이 통일
+                
+                // 텍스트, 게이지 중 최대 넓이 기준으로 중앙 정렬 X좌표 계산
+                const uiMaxWidth = Math.max(textWidth, barWidth);
+                const startX = this.x - (uiMaxWidth / 2);
+                
+                // 텍스트 및 게이지 Y 좌표 설정 (3줄 레이아웃)
+                const textY = this.y - 85; 
+                const expGaugeY = textY + 10;
+                const hpGaugeY = expGaugeY + 8;
+
+                // 1. 윗행: 텍스트 렌더링
+                const textOffsetX = startX + (uiMaxWidth - textWidth) / 2;
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = 'white';
+                ctx.strokeText(levelText, textOffsetX, textY);
+                ctx.fillStyle = 'black';
+                ctx.fillText(levelText, textOffsetX, textY);
+                
+                // 게이지 시작 X좌표 (중앙 정렬)
+                const gaugeStartX = startX + (uiMaxWidth - barWidth) / 2;
+                
+                // 2. 중간행: 경험치 게이지
+                const reqExp = 100 + ((this.stateData.level - 1) * 200);
+                const expWidth = Math.min(barWidth, (this.stateData.exp / reqExp) * barWidth);
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(gaugeStartX, expGaugeY, barWidth, 6);
+                ctx.fillStyle = '#ffcc00'; // 경험치 (노란색)
+                ctx.fillRect(gaugeStartX, expGaugeY, expWidth, 6);
+
+                // 3. 아랫행: 체력 게이지
+                const hpWidth = Math.max(0, (this.hp / this.stateData.maxHp) * barWidth);
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(gaugeStartX, hpGaugeY, barWidth, 6);
+                ctx.fillStyle = '#ff3333'; // 체력 (빨간색)
+                ctx.fillRect(gaugeStartX, hpGaugeY, hpWidth, 6);
+
+                if (this.state === 'SLEEPING' && !targetAnim) {
+                    ctx.fillStyle = '#aaaaff';
+                    ctx.fillText('Zzz..', this.x - 15, textY - 15);
+                }
+            }
+        }
+
+        function spawnCats() {
+            if(cats && cats.length > 0) {
+                cats.forEach(c => { if(c.domElement) c.domElement.remove(); });
+            }
+            cats = [];
+            Object.keys(config.selectedCats).forEach(id => {
+                if(config.selectedCats[id].active) cats.push(new Cat(id));
+            });
+        }
+
+        function spawnFood(mappingData, quantity = 1) {
+            for(let i=0; i<quantity; i++) {
+                foods.push({
+                    mapId: mappingData.id,
+                    pt: Number(mappingData.pt) || 10,
+                    maxPt: Number(mappingData.pt) || 10,
+                    x: Math.random() * (canvas.width - 100) + 50,
+                    y: -100 - (i * 20), 
+                    w: 100, 
+                    h: 100,
+                    isGrounded: false // [반영] 바닥 닿음 여부 초기화
+                });
+            }
+        }
+
+        function renderEngine() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = foods.length - 1; i >= 0; i--) {
+                let f = foods[i];
+                const targetY = canvas.height - 100; // [수정] 고양이와 바닥선 일치
+                
+                // [반영] 먹이가 바닥에 닿을 때까지 떨어지게 처리
+                if (f.y < targetY) {
+                    f.y += 6; 
+                } else {
+                    f.y = targetY;
+                    f.isGrounded = true; // 바닥에 안착 완료
+                }
+                
+                const img = mappingImageCache[f.mapId];
+                const drawX = f.x - 50;
+                const drawY = f.y - 50;
+                const dWidth = f.w; 
+                
+                if (img && img.complete) {
+                    const ratio = Math.max(0, f.w / 100);
+                    const sWidth = img.width * ratio;
+                    if (sWidth > 0 && dWidth > 0) {
+                        ctx.drawImage(img, 0, 0, sWidth, img.height, drawX, drawY, dWidth, 100);
+                    }
+                } else {
+                    if (dWidth > 0) {
+                        ctx.fillStyle = '#000'; 
+                        ctx.fillRect(drawX - 2, drawY - 2, dWidth + 4, 104);
+                        ctx.fillStyle = '#FFD700';
+                        ctx.fillRect(drawX, drawY, dWidth, 100);
+                    }
+                }
+
+                if (f.pt <= 0 || f.w <= 0) foods.splice(i, 1);
+            }
+
+            cats.forEach(c => { c.update(); c.draw(); });
+
+            for (let i = floatTexts.length - 1; i >= 0; i--) {
+                let ft = floatTexts[i];
+                ctx.fillStyle = ft.color;
+                ctx.font = 'bold 20px "Courier New"';
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ft.y -= 1.5;
+                ft.life--;
+                if (ft.life <= 0) floatTexts.splice(i, 1);
+            }
+
+            if(Date.now() % 1000 < 16) saveToDB();
+            
+            Object.keys(catStates).forEach(id => {
+                const cObj = cats.find(c => c.id === id);
+                if(cObj) { catStates[id].hp = cObj.hp; }
+            });
+
+            requestAnimationFrame(renderEngine);
+        }
+
+        /* =========================================================================
+           5. 시스템 통신 (WebSocket)
+        ========================================================================= */
+        function initWebSocket() {
+            if (ws) { ws.onclose = null; ws.close(); }
+            const statusEl = document.getElementById('connection-status');
+            statusEl.innerText = "🟡 대기중";
+            statusEl.style.color = "#ffcc00";
+
+            try { ws = new WebSocket(config.wsUrl); } catch (e) { return; }
+
+            ws.onopen = () => {
+                statusEl.innerText = "🟢 대기중";
+                statusEl.style.color = "#00ff00";
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if(data.action === "chat_event") {
+                    const isGift = data.is_gift;
+                    const coinValue = parseInt(data.coin_value) || 0;
+                    const giftCount = parseInt(data.gift_count) || 1;
+
+                    // [수정] 채팅 텍스트(키워드) 매칭 로직 완전 삭제, 오직 선물(isGift)의 코인 범위만 판별
+                    if (isGift) {
+                        for(let m of config.mappings) {
+                            const minC = parseInt(m.minCoin);
+                            const maxC = parseInt(m.maxCoin);
+                            let coinMatched = true;
+                            
+                            if (!isNaN(minC) && coinValue < minC) coinMatched = false;
+                            if (!isNaN(maxC) && coinValue > maxC) coinMatched = false;
+                            // 값이 둘 다 비어있으면 코인 조건 발동 안함
+                            if (isNaN(minC) && isNaN(maxC)) coinMatched = false;
+
+                            if(coinMatched) {
+                                spawnFood(m, giftCount);
+                                break; 
+                            }
+                        }
+                    }
+                }
+            };
+
+            ws.onclose = () => {
+                statusEl.innerText = "🔴 대기중";
+                statusEl.style.color = "#ff0000";
+                setTimeout(initWebSocket, 3000);
+            };
+        }
+
+        // 구동 준비
+        renderEngine();
+
+    </script>
+</body>
+</html>
