@@ -4,7 +4,7 @@
       "id": "m1", 
       "keys": "멸치", 
       "minCoin": "", 
-      "maxCoin": "9", 
+      "maxCoin": "1", 
       "pt": 1, 
       "image": "./images/m1_fish.png", 
       "fileName": "m1_fish.png" 
@@ -12,9 +12,9 @@
     { 
       "id": "m2", 
       "keys": "참치캔", 
-      "minCoin": "10", 
+      "minCoin": "2", 
       "maxCoin": "99", 
-      "pt": 15, "image": 
+      "pt": 30, "image": 
       "./images/m2_can.png", 
       "fileName": "m2_can.png"
     },
@@ -23,15 +23,15 @@
       "keys": "츄르", 
       "minCoin": "100", 
       "maxCoin": "999", 
-      "pt": 30, 
+      "pt": 50, 
       "image": "./images/m3_snack.png", 
       "fileName": "m3_snack.png"
     },
     { "id": "m4", 
       "keys": "연어", 
       "minCoin": "1000", 
-      "maxCoin": "9", 
-      "pt": 50, 
+      "maxCoin": "", 
+      "pt": 100, 
       "image": "./images/m4_salmon.png", 
       "fileName": "m4_salmon.gif"
     }
