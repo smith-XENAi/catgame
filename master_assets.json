@@ -1,0 +1,46 @@
+{
+  "system": {
+    "version": "1.0",
+    "wsUrl": "wss://console-frown-remake.ngrok-free.dev"
+  },
+  "cats": {
+    "calico": {
+      "id": "calico",
+      "tier": "free",
+      "default_name": "포춘",
+      "anims": {
+        "IDLE": "./images/calico_idle.gif",
+        "MOVE": "./images/calico_move.gif",
+        "EATING": "./images/calico_eat.gif",
+        "SLEEPING": "./images/calico_sleep.gif"
+      }
+    },
+    "cheese": {
+      "id": "cheese",
+      "tier": "free",
+      "default_name": "리온",
+      "anims": {
+        "IDLE": "./images/cheese_idle.gif",
+        "MOVE": "./images/cheese_move.gif",
+        "EATING": "./images/cheese_eat.gif",
+        "SLEEPING": "./images/cheese_sleep.gif"
+      }
+    }
+  },
+  "foods": {
+    "f1": {
+      "id": "f1",
+      "name": "멸치",
+      "image": "./images/m1_fish.png",
+      "fileName": "m1_fish.png",
+      "base_pt": 1
+    },
+    "f2": {
+      "id": "f2",
+      "name": "참치캔",
+      "image": "./images/m2_can.png",
+      "fileName": "m2_can.png",
+      "base_pt": 30
+    }
+  }
+}
