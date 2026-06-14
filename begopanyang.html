@@ -1,4 +1,104 @@
-<!-- ... existing code ... -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>배고파냥 - STREAMER CONTROLLER</title>
+    <style>
+        body { background: #0a0e17; color: #e0e6ed; font-family: 'Courier New', Courier, monospace; padding: 20px; line-height: 1.6; margin: 0; }
+        .container { max-width: 900px; margin: 0 auto; background: #131a26; padding: 30px; border-radius: 12px; border: 3px solid #0066cc; box-shadow: 0 0 20px rgba(0, 102, 204, 0.3); }
+        
+        h1 { color: #00ccff; border-bottom: 2px solid #003366; padding-bottom: 10px; margin-top: 0; text-shadow: 0 0 5px rgba(0,204,255,0.5); }
+        h3 { color: #fff; margin-bottom: 15px; }
+
+        .section { background: #1a2332; padding: 20px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #2a3749; display: none; }
+        .section.active { display: block; animation: fadeIn 0.5s; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .btn { padding: 10px 15px; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; background: #004488; color: white; transition: all 0.2s; font-family: inherit; }
+        .btn:hover { background: #0066cc; transform: translateY(-2px); }
+        .btn-success { background: #00aa55; }
+        .btn-success:hover { background: #00cc66; }
+        .btn-danger { background: #aa0033; }
+        .btn-danger:hover { background: #cc0044; }
+
+        input[type="text"], input[type="number"], select { padding: 12px; background: #080c13; color: #00ffcc; border: 1px solid #004488; border-radius: 5px; font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.2s; width: 100%; box-sizing: border-box; }
+        input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: #00ccff; box-shadow: 0 0 8px rgba(0, 204, 255, 0.3); }
+
+        /* Login Area */
+        #login-area { text-align: center; padding: 40px 20px; }
+        #login-area input { max-width: 300px; text-align: center; margin-bottom: 20px; display: inline-block; }
+
+        /* Fixed Donor Area */
+        .fixed-donor-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; background: #080c13; padding: 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749; align-items: center; }
+        .fixed-list { margin-top: 15px; max-height: 200px; overflow-y: auto; }
+        .fixed-item { display: flex; justify-content: space-between; background: #111; padding: 10px; border-radius: 4px; margin-bottom: 5px; border-left: 3px solid #00ffcc; }
+
+        /* Food Mapping Area */
+        .mapping-row { display: flex; align-items: center; gap: 10px; background: #080c13; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749;}
+        .mapping-row select { flex: 2; }
+        .mapping-row .coin-input { display: flex; align-items: center; gap: 5px; flex: 3; }
+        .mapping-row input { width: 80px; text-align: center; }
+
+        /* Result Area */
+        .result-panel { background: #000; padding: 20px; border-radius: 8px; border: 1px solid #00aa55; text-align: center; margin-top: 20px; }
+        .url-box { background: #131a26; padding: 15px; border-radius: 5px; font-weight: bold; color: #00ffcc; word-break: break-all; margin: 15px 0; border: 1px dashed #00aa55; font-size: 14px;}
+        
+        .toast { position: fixed; top: 20px; right: 20px; background: #333; color: #fff; padding: 15px 20px; border-radius: 5px; border-left: 5px solid #00ffcc; z-index: 1000; opacity: 0; transition: 0.3s; pointer-events: none; }
+        .toast.show { opacity: 1; }
+        .toast.error { border-left-color: #ff0055; }
+    </style>
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+
+    <div class="container">
+        <h1>🐾 배고파냥 - STREAMER SETTING</h1>
+        
+        <!-- 1. 로그인 구역 -->
+        <div id="login-area" class="section active">
+            <h3>1. 방송 계정 연동</h3>
+            <p style="color: #8892b0; font-size: 14px;">플랫폼의 고유 아이디(예: @yoom1111)를 입력하여 세션을 시작하세요.</p>
+            <input type="text" id="streamer-id" placeholder="@스트리머ID 입력">
+            <br>
+            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px;" onclick="doLogin()">데이터 로드 및 세팅 시작</button>
+        </div>
+
+        <!-- 2. 대시보드 구역 -->
+        <div id="dashboard-area" style="display:none;">
+            <div style="background: #080c13; padding: 10px 20px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #00ccff;">
+                현재 접속 계정: <b id="display-user-id" style="color:#00ffcc; font-size: 18px;"></b>
+            </div>
+
+            <!-- 먹이 맵핑 -->
+            <div class="section active">
+                <h3>2. 후원 먹이 코인 맵핑</h3>
+                <p style="color: #8892b0; font-size: 12px;">시청자가 후원한 코인의 범위(Min~Max)에 따라 어떤 먹이가 떨어질지 설정하세요.</p>
+                
+                <div id="mapping-container"></div>
+                <button class="btn" style="width: 100%; margin-top: 10px;" onclick="addMappingRow()">➕ 새로운 조건 추가하기</button>
+            </div>
+
+            <!-- 고정 후원자 지정 -->
+            <div class="section active">
+                <h3>3. 열혈 팬(VIP) 전용 고양이 고정 등록</h3>
+                <p style="color: #8892b0; font-size: 12px;">특정 닉네임의 후원자에게는 랜덤 고양이가 아닌, 지정된 고양이와 특별한 이름을 고정 부여합니다.</p>
+                
+                <div class="fixed-donor-row">
+                    <input type="text" id="vip-nickname" placeholder="후원자 닉네임 (정확히 입력)">
+                    <select id="vip-cat-select">
+                        <!-- JS에서 마스터 에셋 기반 렌더링 -->
+                    </select>
+                    <input type="text" id="vip-custom-name" placeholder="표시할 고양이 이름">
+                    <button class="btn btn-success" onclick="addFixedDonor()">등록</button>
+                </div>
+
+                <div class="fixed-list" id="fixed-donor-list">
+                    <!-- 등록된 VIP 목록 렌더링 -->
+                </div>
+            </div>
+
             <!-- 저장 및 URL 발급 -->
             <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 로컬 서버 설정 저장 및 송출용 URL 발급</button>
 
@@ -225,7 +325,7 @@
                 return showToast('로컬 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
             }
 
-            // [URL 생성 완벽 구조화] 어떤 파일명으로 접속하든 무조건 오류 없이 Viewer.html 로 치환
+            // https://www.hanwha.co.kr/newsroom/discover/view.do?seq=4225 어떤 파일명으로 접속하든 무조건 오류 없이 Viewer.html 로 치환
             const urlObj = new URL(window.location.href);
             let path = urlObj.pathname;
             path = path.substring(0, path.lastIndexOf('/') + 1); // 마지막 슬래시 뒤의 파일명 모조리 삭제
