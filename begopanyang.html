@@ -198,8 +198,14 @@
                         showToast('기존 세팅 데이터를 성공적으로 불러왔습니다!');
                     } else {
                         document.getElementById('mapping-container').innerHTML = '';
-                        addMappingRow();
-                        showToast('신규 유저입니다. 세팅을 진행해주세요.');
+                        // 신규 유저일 경우 마스터 DB에 있는 기본 먹이들을 초기 슬롯으로 쫙 깔아줌
+                        const foodKeys = Object.keys(masterDB.foods);
+                        if (foodKeys.length > 0) {
+                            foodKeys.forEach(key => addMappingRow({ foodId: key, minCoin: '', maxCoin: '' }));
+                        } else {
+                            addMappingRow();
+                        }
+                        showToast('신규 유저입니다. 기본 먹이 슬롯이 자동 배치되었습니다.');
                     }
                 }
 
