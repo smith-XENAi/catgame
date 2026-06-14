@@ -28,7 +28,7 @@
 
         /* Login Area */
         #login-area { text-align: center; padding: 40px 20px; }
-        #login-area input { max-width: 300px; text-align: center; margin-bottom: 20px; display: inline-block; }
+        #login-area input { max-width: 300px; text-align: center; margin-bottom: 10px; display: inline-block; }
 
         /* Fixed Donor Area */
         .fixed-donor-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; background: #080c13; padding: 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749; align-items: center; }
@@ -58,11 +58,13 @@
         
         <!-- 1. 로그인 구역 -->
         <div id="login-area" class="section active">
-            <h3>1. 방송 계정 연동</h3>
-            <p style="color: #8892b0; font-size: 14px;">플랫폼의 고유 아이디(예: @yoom1111)를 입력하여 세션을 시작하세요.</p>
+            <h3>1. 방송 계정 연동 및 코어 연결</h3>
+            <p style="color: #8892b0; font-size: 14px;">플랫폼 아이디와 코어 서버에서 발급된 Ngrok 주소를 입력하세요.</p>
             <input type="text" id="streamer-id" placeholder="@스트리머ID 입력">
             <br>
-            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px;" onclick="doLogin()">데이터 로드 및 세팅 시작</button>
+            <input type="text" id="ws-url" placeholder="wss://... (코어 터미널에 표시된 Ngrok 주소)">
+            <br>
+            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px; margin-top:10px;" onclick="doLogin()">데이터 로드 및 세팅 시작</button>
         </div>
 
         <!-- 2. 대시보드 구역 -->
@@ -113,13 +115,20 @@
 
     <script>
         // ============================================================================
-        // 1. 상태 변수 및 웹소켓 설정 (목업 제거 및 실제 통신 규격 적용)
+        // 1. 상태 변수 및 설정
         // ============================================================================
         let masterDB = { cats: {}, foods: {} };
         let currentUser = "";
         let mappingCount = 0;
         let fixedDonors = [];
         let ws = null;
+
+        window.onload = () => {
+            const savedWs = localStorage.getItem('bego_ws_url');
+            const savedId = localStorage.getItem('bego_user_id');
+            if(savedWs) document.getElementById('ws-url').value = savedWs;
+            if(savedId) document.getElementById('streamer-id').value = savedId;
+        };
 
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
@@ -129,54 +138,55 @@
         }
 
         // ============================================================================
-        // 2. 로그인 및 데이터 로드 (웹소켓 IN)
+        // 2. 로그인 및 데이터 로드 (웹소켓 연결)
         // ============================================================================
         function doLogin() {
             const id = document.getElementById('streamer-id').value.trim();
-            if(!id) return showToast('스트리머 ID를 입력해주세요.', true);
+            const wsUrl = document.getElementById('ws-url').value.trim();
             
+            if(!id) return showToast('스트리머 ID를 입력해주세요.', true);
+            if(!wsUrl.startsWith('wss://') && !wsUrl.startsWith('ws://')) return showToast('올바른 웹소켓 주소(wss://...)를 입력해주세요.', true);
+            
+            localStorage.setItem('bego_user_id', id);
+            localStorage.setItem('bego_ws_url', wsUrl);
+
             currentUser = id;
             document.getElementById('login-area').style.display = 'none';
             document.getElementById('dashboard-area').style.display = 'block';
             document.getElementById('display-user-id').innerText = currentUser;
 
-            initWebSocket(); // 로그인 성공 시 로컬 서버 접속 및 기존 데이터 호출
+            initWebSocket(wsUrl); 
         }
 
-        function initWebSocket() {
+        function initWebSocket(wsUrl) {
             if(ws) ws.close();
             
             try {
-                ws = new WebSocket("ws://127.0.0.1:8001");
+                ws = new WebSocket(wsUrl);
             } catch(e) {
-                showToast("로컬 서버 연결에 실패했습니다.", true);
+                showToast("서버 연결에 실패했습니다. Ngrok 주소를 다시 확인해주세요.", true);
                 return;
             }
 
             ws.onopen = () => {
                 showToast('🟢 로컬 DB 서버 연동 완료. 데이터를 불러옵니다.');
-                // M_begopanyang 에 마스터 및 내 데이터 조회 요청 푸시
                 ws.send(JSON.stringify({ action: "load_db", payload: {} }));
             };
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 
-                // DB 조회 응답 수신
                 if (data.action === "load_db_res") {
                     const db = data.data;
                     
-                    // 1. 마스터 에셋 (고양이/먹이 목록) 동기화
                     if(db.master_assets) {
                         masterDB = db.master_assets;
-                        initSelectors(); // 셀렉트 박스 렌더링
+                        initSelectors();
                     }
 
-                    // 2. 내 스트리머 계정의 기존 설정(DB) 복원 로직
                     if(db.user_data && db.user_data[currentUser]) {
                         const userSettings = db.user_data[currentUser].settings || {};
                         
-                        // 먹이 맵핑 UI 복원
                         document.getElementById('mapping-container').innerHTML = ''; 
                         if(userSettings.foodMappings && userSettings.foodMappings.length > 0) {
                             userSettings.foodMappings.forEach(m => addMappingRow(m));
@@ -184,28 +194,25 @@
                             addMappingRow();
                         }
 
-                        // VIP 고정 후원자 UI 복원
                         if(userSettings.fixedDonors) {
                             fixedDonors = userSettings.fixedDonors;
                             renderFixedDonors();
                         }
                         showToast('기존 세팅 데이터를 성공적으로 불러왔습니다!');
                     } else {
-                        // DB에 없는 신규 유저일 경우
                         document.getElementById('mapping-container').innerHTML = '';
                         addMappingRow();
                         showToast('신규 유저입니다. 세팅을 진행해주세요.');
                     }
                 }
 
-                // 저장 완료 응답 수신
                 if (data.action === "save_user_data_res") {
-                    showToast('설정이 로컬 서버에 안전하게 저장되었습니다!');
+                    showToast('설정이 코어 서버에 안전하게 저장되었습니다!');
                 }
             };
 
             ws.onclose = () => {
-                showToast('🔴 로컬 서버와 연결이 끊어졌습니다.', true);
+                showToast('🔴 코어 서버와 연결이 끊어졌습니다.', true);
             };
         }
 
@@ -231,7 +238,6 @@
                 foodOptions += `<option value="${f.id}" ${isSelected}>${f.name}</option>`;
             });
 
-            // 기존 데이터가 있으면 채워넣고, 없으면 빈 칸
             const minVal = existingData ? existingData.minCoin : '';
             const maxVal = existingData ? existingData.maxCoin : '';
 
@@ -257,7 +263,6 @@
             const customName = document.getElementById('vip-custom-name').value.trim();
 
             if(!nick || !catId || !customName) return showToast('모든 정보를 입력해주세요.', true);
-            
             if(fixedDonors.find(d => d.nickname === nick)) return showToast('이미 등록된 닉네임입니다.', true);
 
             fixedDonors.push({ nickname: nick, catId: catId, customName: customName });
@@ -318,19 +323,22 @@
                 }
             };
 
-            // 로컬 서버로 실제 저장 패킷 전송
             if(ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ action: "save_user_data", payload: payload }));
             } else {
-                return showToast('로컬 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
+                return showToast('코어 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
             }
 
-            // https://www.hanwha.co.kr/newsroom/discover/view.do?seq=4225 어떤 파일명으로 접속하든 무조건 오류 없이 Viewer.html 로 치환
+            // https://m.sgdesign.co.kr/article/%EA%B3%B5%EC%A7%80%EC%82%AC%ED%95%AD/1/133/?page=1 Viewer도 Ngrok 터널을 알 수 있도록 URL 파라미터에 ws 주소 동봉
+            const wsUrl = document.getElementById('ws-url').value.trim();
             const urlObj = new URL(window.location.href);
             let path = urlObj.pathname;
-            path = path.substring(0, path.lastIndexOf('/') + 1); // 마지막 슬래시 뒤의 파일명 모조리 삭제
-            urlObj.pathname = path + 'Viewer.html';              // 안전하게 Viewer.html만 부착
-            urlObj.search = '?user=' + encodeURIComponent(currentUser); // 쿼리 파라미터 세팅
+            path = path.substring(0, path.lastIndexOf('/') + 1); 
+            urlObj.pathname = path + 'Viewer.html';              
+            
+            // 뷰어에 필요한 파라미터 (유저 아이디 + ws 접속 주소)
+            urlObj.searchParams.set('user', currentUser);
+            urlObj.searchParams.set('ws', wsUrl);
 
             document.getElementById('final-url').innerText = urlObj.toString();
             document.getElementById('result-area').style.display = 'block';
