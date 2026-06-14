@@ -20,32 +20,24 @@
         .btn:hover { background: #0066cc; transform: translateY(-2px); }
         .btn-success { background: #00aa55; }
         .btn-success:hover { background: #00cc66; }
-        .btn-warning { background: #cc6600; }
-        .btn-warning:hover { background: #ff8800; }
         .btn-danger { background: #aa0033; }
         .btn-danger:hover { background: #cc0044; }
 
-        input[type="text"], input[type="number"] { padding: 12px; background: #080c13; color: #00ffcc; border: 1px solid #004488; border-radius: 5px; font-family: inherit; font-size: 16px; width: calc(100% - 26px); outline: none; transition: border-color 0.2s;}
-        input[type="text"]:focus, input[type="number"]:focus { border-color: #00ccff; box-shadow: 0 0 8px rgba(0, 204, 255, 0.3); }
+        input[type="text"], input[type="number"], select { padding: 12px; background: #080c13; color: #00ffcc; border: 1px solid #004488; border-radius: 5px; font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.2s; width: 100%; box-sizing: border-box; }
+        input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: #00ccff; box-shadow: 0 0 8px rgba(0, 204, 255, 0.3); }
 
         /* Login Area */
         #login-area { text-align: center; padding: 40px 20px; }
         #login-area input { max-width: 300px; text-align: center; margin-bottom: 20px; display: inline-block; }
 
-        /* Cat Pickup Area */
-        .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .cat-card { background: #080c13; border: 2px solid #2a3749; padding: 15px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s; }
-        .cat-card:hover { border-color: #0066cc; background: #0c121d; }
-        .cat-card.selected { border-color: #00ffcc; box-shadow: 0 0 15px rgba(0, 255, 204, 0.3); }
-
-        /* Stats Area */
-        .stat-box { background: #000; border: 1px dashed #00ccff; padding: 15px; border-radius: 8px; margin-top: 15px; display: none; }
-        .stat-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #111; padding-bottom: 8px; }
-        .stat-value { color: #00ffcc; font-weight: bold; font-size: 18px; }
+        /* Fixed Donor Area */
+        .fixed-donor-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; background: #080c13; padding: 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749; align-items: center; }
+        .fixed-list { margin-top: 15px; max-height: 200px; overflow-y: auto; }
+        .fixed-item { display: flex; justify-content: space-between; background: #111; padding: 10px; border-radius: 4px; margin-bottom: 5px; border-left: 3px solid #00ffcc; }
 
         /* Food Mapping Area */
         .mapping-row { display: flex; align-items: center; gap: 10px; background: #080c13; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749;}
-        .mapping-row select { padding: 10px; background: #131a26; color: #fff; border: 1px solid #004488; border-radius: 5px; flex: 2; font-family: inherit; }
+        .mapping-row select { flex: 2; }
         .mapping-row .coin-input { display: flex; align-items: center; gap: 5px; flex: 3; }
         .mapping-row input { width: 80px; text-align: center; }
 
@@ -79,55 +71,39 @@
                 현재 접속 계정: <b id="display-user-id" style="color:#00ffcc; font-size: 18px;"></b>
             </div>
 
-            <!-- 고양이 픽업 -->
-            <div class="section active">
-                <h3>2. 출전 고양이 픽업 (초기 스탯 부여)</h3>
-                <p style="color: #8892b0; font-size: 12px;">마스터가 등록한 고양이 중 하나를 선택하세요. 스탯은 랜덤 부여되며 수동 입력이 불가합니다.</p>
-                
-                <div class="cat-grid" id="cat-list">
-                    <!-- JS에서 Master DB를 읽어와 렌더링 -->
-                </div>
-
-                <div id="cat-stat-panel" class="stat-box">
-                    <h4 style="margin-top:0; color:#fff;">🎲 운명적 스탯 부여 (총 150pt 무작위 분배)</h4>
-                    <div style="margin-bottom: 15px;">
-                        <input type="text" id="custom-cat-name" placeholder="나만의 고양이 이름 지어주기 (예: 우리집 냥이)" style="width: calc(100% - 26px); margin-bottom: 10px;">
-                    </div>
-                    <div class="stat-row">
-                        <span>⚡ 스피드 (Speed)</span>
-                        <span class="stat-value" id="stat-speed">0</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>🍗 먹방력 (Eating)</span>
-                        <span class="stat-value" id="stat-eating">0</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>❤️ 최대 체력 (Max HP)</span>
-                        <span class="stat-value" id="stat-hp">0</span>
-                    </div>
-                    
-                    <button class="btn btn-warning" style="width: 100%; margin-top: 15px; font-size: 16px;" onclick="rerollStats()">🔄 맘에 들지 않나요? 스탯 리롤(Re-roll)하기</button>
-                </div>
-            </div>
-
             <!-- 먹이 맵핑 -->
             <div class="section active">
-                <h3>3. 후원 먹이 코인 맵핑</h3>
+                <h3>2. 후원 먹이 코인 맵핑</h3>
                 <p style="color: #8892b0; font-size: 12px;">시청자가 후원한 코인의 범위(Min~Max)에 따라 어떤 먹이가 떨어질지 설정하세요.</p>
                 
-                <div id="mapping-container">
-                    <!-- 맵핑 로우가 추가될 공간 -->
-                </div>
-                
+                <div id="mapping-container"></div>
                 <button class="btn" style="width: 100%; margin-top: 10px;" onclick="addMappingRow()">➕ 새로운 조건 추가하기</button>
             </div>
 
+            <!-- 고정 후원자 지정 -->
+            <div class="section active">
+                <h3>3. 열혈 팬(VIP) 전용 고양이 고정 등록</h3>
+                <p style="color: #8892b0; font-size: 12px;">특정 닉네임의 후원자에게는 랜덤 고양이가 아닌, 지정된 고양이와 특별한 이름을 고정 부여합니다.</p>
+                
+                <div class="fixed-donor-row">
+                    <input type="text" id="vip-nickname" placeholder="후원자 닉네임 (정확히 입력)">
+                    <select id="vip-cat-select">
+                        <!-- JS에서 마스터 에셋 기반 렌더링 -->
+                    </select>
+                    <input type="text" id="vip-custom-name" placeholder="표시할 고양이 이름">
+                    <button class="btn btn-success" onclick="addFixedDonor()">등록</button>
+                </div>
+
+                <div class="fixed-list" id="fixed-donor-list">
+                    <!-- 등록된 VIP 목록 렌더링 -->
+                </div>
+            </div>
+
             <!-- 저장 및 URL 발급 -->
-            <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 설정 저장 및 송출용 URL 발급</button>
+            <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 로컬 서버 설정 저장 및 송출용 URL 발급</button>
 
             <div id="result-area" class="result-panel" style="display: none;">
                 <h3 style="color:#00ffcc; margin-top:0;">✅ 모든 설정이 저장되었습니다!</h3>
-                <p style="color: #aaa; font-size: 13px;">아래 URL을 OBS 브라우저 소스에 붙여넣기 하세요. (너비/높이는 화면에 맞게 자유 지정)</p>
                 <div class="url-box" id="final-url"></div>
                 <button class="btn" onclick="copyUrl()">📋 URL 복사하기</button>
                 <button class="btn btn-danger" onclick="window.open(document.getElementById('final-url').innerText, '_blank')">🚀 뷰어 새창 열기 테스트</button>
@@ -141,26 +117,21 @@
         // ============================================================================
         const masterDB = {
             "cats": {
-                "calico": { "id": "calico", "tier": "free", "default_name": "삼색이" },
-                "cheese": { "id": "cheese", "tier": "free", "default_name": "치즈냥" },
-                "black": { "id": "black", "tier": "paid", "default_name": "까망이" }
+                "calico": { "id": "calico", "name": "삼색이" },
+                "cheese": { "id": "cheese", "name": "치즈냥" },
+                "black": { "id": "black", "name": "까망이" }
             },
             "foods": {
-                "f1": { "id": "f1", "name": "멸치 (1pt)" },
-                "f2": { "id": "f2", "name": "참치캔 (30pt)" },
-                "f3": { "id": "f3", "name": "최고급 연어 (100pt)" }
+                "f1": { "id": "f1", "name": "멸치" },
+                "f2": { "id": "f2", "name": "참치캔" },
+                "f3": { "id": "f3", "name": "최고급 연어" }
             }
         };
 
-        // 유저 세션 데이터 저장소
         let currentUser = "";
-        let selectedCatId = "";
-        let catStats = { speed: 0, eating: 0, hp: 0 };
         let mappingCount = 0;
+        let fixedDonors = [];
 
-        // ============================================================================
-        // 2. UI Helper Functions
-        // ============================================================================
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
             toast.innerText = (isError ? "❌ " : "✅ ") + msg;
@@ -168,104 +139,28 @@
             setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
 
-        // ============================================================================
-        // 3. Login & Initialization
-        // ============================================================================
         function doLogin() {
             const id = document.getElementById('streamer-id').value.trim();
             if(!id) return showToast('스트리머 ID를 입력해주세요.', true);
-            if(!id.startsWith('@')) return showToast('ID는 @로 시작해야 합니다. (예: @yoom1111)', true);
-
+            
             currentUser = id;
             document.getElementById('login-area').style.display = 'none';
             document.getElementById('dashboard-area').style.display = 'block';
             document.getElementById('display-user-id').innerText = currentUser;
 
-            initCatList();
-            addMappingRow(); // 기본 맵핑 로우 1개 추가
+            initSelectors();
+            addMappingRow();
             showToast('데이터 로드 완료! 세팅을 진행해주세요.');
         }
 
-        // ============================================================================
-        // 4. Cat Selection & Random Stats
-        // ============================================================================
-        function initCatList() {
-            const container = document.getElementById('cat-list');
-            container.innerHTML = '';
-            
+        function initSelectors() {
+            const catSelect = document.getElementById('vip-cat-select');
+            catSelect.innerHTML = '<option value="">-- 고양이 선택 --</option>';
             Object.values(masterDB.cats).forEach(cat => {
-                const card = document.createElement('div');
-                card.className = 'cat-card';
-                card.id = `cat-${cat.id}`;
-                card.innerHTML = `
-                    <div style="font-size: 30px; margin-bottom:10px;">🐈</div>
-                    <b style="color:#00ffcc;">${cat.default_name}</b>
-                    <div style="font-size: 11px; color:#888; margin-top:5px;">등급: ${cat.tier.toUpperCase()}</div>
-                `;
-                card.onclick = () => selectCat(cat.id, cat.default_name);
-                container.appendChild(card);
+                catSelect.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
             });
         }
 
-        function selectCat(catId, defaultName) {
-            // UI Update
-            document.querySelectorAll('.cat-card').forEach(el => el.classList.remove('selected'));
-            document.getElementById(`cat-${catId}`).classList.add('selected');
-            
-            selectedCatId = catId;
-            document.getElementById('custom-cat-name').value = `내고양이_${defaultName}`;
-            document.getElementById('cat-stat-panel').style.display = 'block';
-            
-            // 최초 선택 시 리롤 실행
-            rerollStats();
-        }
-
-        function rerollStats() {
-            if(!selectedCatId) return;
-
-            // 총 150 포인트를 3개의 스탯에 무작위 분배 (최소 10 보장)
-            let remaining = 150 - 30; // 30은 기본 보장치
-            
-            let spdAdd = Math.floor(Math.random() * (remaining + 1));
-            remaining -= spdAdd;
-            
-            let eatAdd = Math.floor(Math.random() * (remaining + 1));
-            remaining -= eatAdd;
-            
-            let hpAdd = remaining; // 남은건 다 HP로
-
-            // 섞기 알고리즘 (특정 스탯 편중 방지)
-            const arr = [spdAdd, eatAdd, hpAdd].sort(() => Math.random() - 0.5);
-
-            catStats.speed = 10 + arr[0];
-            catStats.eating = 10 + arr[1];
-            catStats.hp = 10 + arr[2] * 2; // HP는 가중치 2배 부여
-
-            // UI 렌더링 애니메이션 처리
-            animateValue('stat-speed', 0, catStats.speed, 500);
-            animateValue('stat-eating', 0, catStats.eating, 500);
-            animateValue('stat-hp', 0, catStats.hp, 500);
-            
-            showToast('🎲 스탯이 무작위로 재설정 되었습니다!');
-        }
-
-        function animateValue(id, start, end, duration) {
-            const obj = document.getElementById(id);
-            let startTimestamp = null;
-            const step = (timestamp) => {
-                if (!startTimestamp) startTimestamp = timestamp;
-                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-                obj.innerHTML = Math.floor(progress * (end - start) + start);
-                if (progress < 1) {
-                    window.requestAnimationFrame(step);
-                }
-            };
-            window.requestAnimationFrame(step);
-        }
-
-        // ============================================================================
-        // 5. Food Mapping Logic
-        // ============================================================================
         function addMappingRow() {
             mappingCount++;
             const container = document.getElementById('mapping-container');
@@ -292,16 +187,51 @@
             container.appendChild(row);
         }
 
-        // ============================================================================
-        // 6. Save & Generate URL
-        // ============================================================================
+        function addFixedDonor() {
+            const nick = document.getElementById('vip-nickname').value.trim();
+            const catId = document.getElementById('vip-cat-select').value;
+            const customName = document.getElementById('vip-custom-name').value.trim();
+
+            if(!nick || !catId || !customName) return showToast('모든 정보를 입력해주세요.', true);
+            
+            // 중복 확인
+            if(fixedDonors.find(d => d.nickname === nick)) {
+                return showToast('이미 등록된 닉네임입니다.', true);
+            }
+
+            fixedDonors.push({ nickname: nick, catId: catId, customName: customName });
+            renderFixedDonors();
+            
+            // 초기화
+            document.getElementById('vip-nickname').value = '';
+            document.getElementById('vip-cat-select').value = '';
+            document.getElementById('vip-custom-name').value = '';
+            showToast(`${nick} 님의 고정 고양이가 등록되었습니다.`);
+        }
+
+        function removeFixedDonor(nick) {
+            fixedDonors = fixedDonors.filter(d => d.nickname !== nick);
+            renderFixedDonors();
+        }
+
+        function renderFixedDonors() {
+            const list = document.getElementById('fixed-donor-list');
+            list.innerHTML = '';
+            fixedDonors.forEach(d => {
+                const catName = masterDB.cats[d.catId].name;
+                list.innerHTML += `
+                    <div class="fixed-item">
+                        <div>
+                            <b style="color:#ffcc00;">[${d.nickname}]</b> 
+                            <span style="color:#aaa; font-size:12px; margin-left:10px;">🐈 ${catName} / 이름: ${d.customName}</span>
+                        </div>
+                        <button class="btn btn-danger" style="padding: 5px 10px; font-size:12px;" onclick="removeFixedDonor('${d.nickname}')">삭제</button>
+                    </div>
+                `;
+            });
+        }
+
         function saveAndGenerate() {
-            if(!selectedCatId) return showToast('출전할 고양이를 선택해주세요.', true);
-
-            const customName = document.getElementById('custom-cat-name').value.trim();
-            if(!customName) return showToast('고양이 이름을 입력해주세요.', true);
-
-            // 맵핑 데이터 수집
             const mappings = [];
             const rows = document.querySelectorAll('.mapping-row');
             let mappingValid = true;
@@ -310,64 +240,32 @@
                 const foodId = row.querySelector('.map-food').value;
                 const minC = parseInt(row.querySelector('.map-min').value);
                 const maxC = parseInt(row.querySelector('.map-max').value);
-
                 if(!foodId) { mappingValid = false; return; }
-                
-                mappings.push({
-                    foodId: foodId,
-                    minCoin: isNaN(minC) ? 0 : minC,
-                    maxCoin: isNaN(maxC) ? 999999 : maxC
-                });
+                mappings.push({ foodId: foodId, minCoin: isNaN(minC) ? 0 : minC, maxCoin: isNaN(maxC) ? 999999 : maxC });
             });
 
-            if(!mappingValid || mappings.length === 0) {
-                return showToast('먹이 맵핑 조건을 정확히 입력해주세요.', true);
-            }
+            if(!mappingValid || mappings.length === 0) return showToast('먹이 맵핑 조건을 입력해주세요.', true);
 
-            // (가상) 최종 JSON 페이로드 생성 (user_data.json 구조에 병합용)
+            // 로컬 서버로 전송할 페이로드 (M_begopanyang 에 웹소켓 전송되는 로직 대체)
             const payload = {
                 streamer_id: currentUser,
-                settings: { foodMappings: mappings },
-                catStates: {}
+                settings: {
+                    foodMappings: mappings,
+                    fixedDonors: fixedDonors // VIP 지정 목록 추가됨
+                }
             };
-            payload.catStates[selectedCatId] = {
-                customName: customName,
-                level: 1,
-                exp: 0,
-                speed: catStats.speed,
-                eating: catStats.eating,
-                maxHp: catStats.hp,
-                hp: catStats.hp
-            };
+            console.log("로컬 서버로 전송될 페이로드:", payload);
 
-            console.log("서버로 전송될 페이로드:", payload);
-
-            // URL 발급 처리
             const baseUrl = window.location.origin + window.location.pathname.replace('User_Controller.html', '');
-            const viewerUrl = `${baseUrl}Viewer.html?user=${encodeURIComponent(currentUser)}`;
-            
-            document.getElementById('final-url').innerText = viewerUrl;
+            document.getElementById('final-url').innerText = `${baseUrl}Viewer.html?user=${encodeURIComponent(currentUser)}`;
             document.getElementById('result-area').style.display = 'block';
-            
-            // 스크롤 맨 아래로 이동
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
             showToast('설정이 성공적으로 저장되었습니다!');
         }
 
         function copyUrl() {
-            const urlText = document.getElementById('final-url').innerText;
-            navigator.clipboard.writeText(urlText).then(() => {
-                showToast('URL이 클립보드에 복사되었습니다.');
-            }).catch(err => {
-                // 폴백 복사
-                const textArea = document.createElement("textarea");
-                textArea.value = urlText;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand("copy");
-                document.body.removeChild(textArea);
-                showToast('URL이 클립보드에 복사되었습니다.');
-            });
+            navigator.clipboard.writeText(document.getElementById('final-url').innerText);
+            showToast('URL이 복사되었습니다.');
         }
     </script>
 </body>
