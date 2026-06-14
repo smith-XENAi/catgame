@@ -1,104 +1,4 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>배고파냥 - STREAMER CONTROLLER</title>
-    <style>
-        body { background: #0a0e17; color: #e0e6ed; font-family: 'Courier New', Courier, monospace; padding: 20px; line-height: 1.6; margin: 0; }
-        .container { max-width: 900px; margin: 0 auto; background: #131a26; padding: 30px; border-radius: 12px; border: 3px solid #0066cc; box-shadow: 0 0 20px rgba(0, 102, 204, 0.3); }
-        
-        h1 { color: #00ccff; border-bottom: 2px solid #003366; padding-bottom: 10px; margin-top: 0; text-shadow: 0 0 5px rgba(0,204,255,0.5); }
-        h3 { color: #fff; margin-bottom: 15px; }
-
-        .section { background: #1a2332; padding: 20px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #2a3749; display: none; }
-        .section.active { display: block; animation: fadeIn 0.5s; }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .btn { padding: 10px 15px; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; background: #004488; color: white; transition: all 0.2s; font-family: inherit; }
-        .btn:hover { background: #0066cc; transform: translateY(-2px); }
-        .btn-success { background: #00aa55; }
-        .btn-success:hover { background: #00cc66; }
-        .btn-danger { background: #aa0033; }
-        .btn-danger:hover { background: #cc0044; }
-
-        input[type="text"], input[type="number"], select { padding: 12px; background: #080c13; color: #00ffcc; border: 1px solid #004488; border-radius: 5px; font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.2s; width: 100%; box-sizing: border-box; }
-        input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: #00ccff; box-shadow: 0 0 8px rgba(0, 204, 255, 0.3); }
-
-        /* Login Area */
-        #login-area { text-align: center; padding: 40px 20px; }
-        #login-area input { max-width: 300px; text-align: center; margin-bottom: 20px; display: inline-block; }
-
-        /* Fixed Donor Area */
-        .fixed-donor-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; background: #080c13; padding: 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749; align-items: center; }
-        .fixed-list { margin-top: 15px; max-height: 200px; overflow-y: auto; }
-        .fixed-item { display: flex; justify-content: space-between; background: #111; padding: 10px; border-radius: 4px; margin-bottom: 5px; border-left: 3px solid #00ffcc; }
-
-        /* Food Mapping Area */
-        .mapping-row { display: flex; align-items: center; gap: 10px; background: #080c13; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749;}
-        .mapping-row select { flex: 2; }
-        .mapping-row .coin-input { display: flex; align-items: center; gap: 5px; flex: 3; }
-        .mapping-row input { width: 80px; text-align: center; }
-
-        /* Result Area */
-        .result-panel { background: #000; padding: 20px; border-radius: 8px; border: 1px solid #00aa55; text-align: center; margin-top: 20px; }
-        .url-box { background: #131a26; padding: 15px; border-radius: 5px; font-weight: bold; color: #00ffcc; word-break: break-all; margin: 15px 0; border: 1px dashed #00aa55; font-size: 14px;}
-        
-        .toast { position: fixed; top: 20px; right: 20px; background: #333; color: #fff; padding: 15px 20px; border-radius: 5px; border-left: 5px solid #00ffcc; z-index: 1000; opacity: 0; transition: 0.3s; pointer-events: none; }
-        .toast.show { opacity: 1; }
-        .toast.error { border-left-color: #ff0055; }
-    </style>
-</head>
-<body>
-    <div id="toast" class="toast"></div>
-
-    <div class="container">
-        <h1>🐾 배고파냥 - STREAMER SETTING</h1>
-        
-        <!-- 1. 로그인 구역 -->
-        <div id="login-area" class="section active">
-            <h3>1. 방송 계정 연동</h3>
-            <p style="color: #8892b0; font-size: 14px;">플랫폼의 고유 아이디(예: @yoom1111)를 입력하여 세션을 시작하세요.</p>
-            <input type="text" id="streamer-id" placeholder="@스트리머ID 입력">
-            <br>
-            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px;" onclick="doLogin()">데이터 로드 및 세팅 시작</button>
-        </div>
-
-        <!-- 2. 대시보드 구역 -->
-        <div id="dashboard-area" style="display:none;">
-            <div style="background: #080c13; padding: 10px 20px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #00ccff;">
-                현재 접속 계정: <b id="display-user-id" style="color:#00ffcc; font-size: 18px;"></b>
-            </div>
-
-            <!-- 먹이 맵핑 -->
-            <div class="section active">
-                <h3>2. 후원 먹이 코인 맵핑</h3>
-                <p style="color: #8892b0; font-size: 12px;">시청자가 후원한 코인의 범위(Min~Max)에 따라 어떤 먹이가 떨어질지 설정하세요.</p>
-                
-                <div id="mapping-container"></div>
-                <button class="btn" style="width: 100%; margin-top: 10px;" onclick="addMappingRow()">➕ 새로운 조건 추가하기</button>
-            </div>
-
-            <!-- 고정 후원자 지정 -->
-            <div class="section active">
-                <h3>3. 열혈 팬(VIP) 전용 고양이 고정 등록</h3>
-                <p style="color: #8892b0; font-size: 12px;">특정 닉네임의 후원자에게는 랜덤 고양이가 아닌, 지정된 고양이와 특별한 이름을 고정 부여합니다.</p>
-                
-                <div class="fixed-donor-row">
-                    <input type="text" id="vip-nickname" placeholder="후원자 닉네임 (정확히 입력)">
-                    <select id="vip-cat-select">
-                        <!-- JS에서 마스터 에셋 기반 렌더링 -->
-                    </select>
-                    <input type="text" id="vip-custom-name" placeholder="표시할 고양이 이름">
-                    <button class="btn btn-success" onclick="addFixedDonor()">등록</button>
-                </div>
-
-                <div class="fixed-list" id="fixed-donor-list">
-                    <!-- 등록된 VIP 목록 렌더링 -->
-                </div>
-            </div>
-
+<!-- ... existing code ... -->
             <!-- 저장 및 URL 발급 -->
             <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 로컬 서버 설정 저장 및 송출용 URL 발급</button>
 
@@ -113,24 +13,13 @@
 
     <script>
         // ============================================================================
-        // 1. Mock DB (마스터 데이터를 읽어왔다고 가정)
+        // 1. 상태 변수 및 웹소켓 설정 (목업 제거 및 실제 통신 규격 적용)
         // ============================================================================
-        const masterDB = {
-            "cats": {
-                "calico": { "id": "calico", "name": "삼색이" },
-                "cheese": { "id": "cheese", "name": "치즈냥" },
-                "black": { "id": "black", "name": "까망이" }
-            },
-            "foods": {
-                "f1": { "id": "f1", "name": "멸치" },
-                "f2": { "id": "f2", "name": "참치캔" },
-                "f3": { "id": "f3", "name": "최고급 연어" }
-            }
-        };
-
+        let masterDB = { cats: {}, foods: {} };
         let currentUser = "";
         let mappingCount = 0;
         let fixedDonors = [];
+        let ws = null;
 
         function showToast(msg, isError = false) {
             const toast = document.getElementById('toast');
@@ -139,6 +28,9 @@
             setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
 
+        // ============================================================================
+        // 2. 로그인 및 데이터 로드 (웹소켓 IN)
+        // ============================================================================
         function doLogin() {
             const id = document.getElementById('streamer-id').value.trim();
             if(!id) return showToast('스트리머 ID를 입력해주세요.', true);
@@ -148,28 +40,100 @@
             document.getElementById('dashboard-area').style.display = 'block';
             document.getElementById('display-user-id').innerText = currentUser;
 
-            initSelectors();
-            addMappingRow();
-            showToast('데이터 로드 완료! 세팅을 진행해주세요.');
+            initWebSocket(); // 로그인 성공 시 로컬 서버 접속 및 기존 데이터 호출
         }
 
+        function initWebSocket() {
+            if(ws) ws.close();
+            
+            try {
+                ws = new WebSocket("ws://127.0.0.1:8001");
+            } catch(e) {
+                showToast("로컬 서버 연결에 실패했습니다.", true);
+                return;
+            }
+
+            ws.onopen = () => {
+                showToast('🟢 로컬 DB 서버 연동 완료. 데이터를 불러옵니다.');
+                // M_begopanyang 에 마스터 및 내 데이터 조회 요청 푸시
+                ws.send(JSON.stringify({ action: "load_db", payload: {} }));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                // DB 조회 응답 수신
+                if (data.action === "load_db_res") {
+                    const db = data.data;
+                    
+                    // 1. 마스터 에셋 (고양이/먹이 목록) 동기화
+                    if(db.master_assets) {
+                        masterDB = db.master_assets;
+                        initSelectors(); // 셀렉트 박스 렌더링
+                    }
+
+                    // 2. 내 스트리머 계정의 기존 설정(DB) 복원 로직
+                    if(db.user_data && db.user_data[currentUser]) {
+                        const userSettings = db.user_data[currentUser].settings || {};
+                        
+                        // 먹이 맵핑 UI 복원
+                        document.getElementById('mapping-container').innerHTML = ''; 
+                        if(userSettings.foodMappings && userSettings.foodMappings.length > 0) {
+                            userSettings.foodMappings.forEach(m => addMappingRow(m));
+                        } else {
+                            addMappingRow();
+                        }
+
+                        // VIP 고정 후원자 UI 복원
+                        if(userSettings.fixedDonors) {
+                            fixedDonors = userSettings.fixedDonors;
+                            renderFixedDonors();
+                        }
+                        showToast('기존 세팅 데이터를 성공적으로 불러왔습니다!');
+                    } else {
+                        // DB에 없는 신규 유저일 경우
+                        document.getElementById('mapping-container').innerHTML = '';
+                        addMappingRow();
+                        showToast('신규 유저입니다. 세팅을 진행해주세요.');
+                    }
+                }
+
+                // 저장 완료 응답 수신
+                if (data.action === "save_user_data_res") {
+                    showToast('설정이 로컬 서버에 안전하게 저장되었습니다!');
+                }
+            };
+
+            ws.onclose = () => {
+                showToast('🔴 로컬 서버와 연결이 끊어졌습니다.', true);
+            };
+        }
+
+        // ============================================================================
+        // 3. UI 렌더링 및 제어
+        // ============================================================================
         function initSelectors() {
             const catSelect = document.getElementById('vip-cat-select');
             catSelect.innerHTML = '<option value="">-- 고양이 선택 --</option>';
             Object.values(masterDB.cats).forEach(cat => {
-                catSelect.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+                catSelect.innerHTML += `<option value="${cat.id}">${cat.default_name || cat.name}</option>`;
             });
         }
 
-        function addMappingRow() {
+        function addMappingRow(existingData = null) {
             mappingCount++;
             const container = document.getElementById('mapping-container');
             const rowId = `map-row-${mappingCount}`;
             
             let foodOptions = `<option value="">-- 드랍될 먹이 선택 --</option>`;
             Object.values(masterDB.foods).forEach(f => {
-                foodOptions += `<option value="${f.id}">${f.name}</option>`;
+                const isSelected = (existingData && existingData.foodId === f.id) ? 'selected' : '';
+                foodOptions += `<option value="${f.id}" ${isSelected}>${f.name}</option>`;
             });
+
+            // 기존 데이터가 있으면 채워넣고, 없으면 빈 칸
+            const minVal = existingData ? existingData.minCoin : '';
+            const maxVal = existingData ? existingData.maxCoin : '';
 
             const row = document.createElement('div');
             row.className = 'mapping-row';
@@ -178,9 +142,9 @@
                 <select class="map-food">${foodOptions}</select>
                 <div class="coin-input">
                     <span style="color:#aaa; font-size:12px;">코인</span>
-                    <input type="number" class="map-min" placeholder="Min" min="0">
+                    <input type="number" class="map-min" placeholder="Min" min="0" value="${minVal}">
                     <span style="color:#aaa;">~</span>
-                    <input type="number" class="map-max" placeholder="Max" min="0">
+                    <input type="number" class="map-max" placeholder="Max" min="0" value="${maxVal}">
                 </div>
                 <button class="btn btn-danger" style="padding: 10px;" onclick="document.getElementById('${rowId}').remove()">X</button>
             `;
@@ -194,15 +158,11 @@
 
             if(!nick || !catId || !customName) return showToast('모든 정보를 입력해주세요.', true);
             
-            // 중복 확인
-            if(fixedDonors.find(d => d.nickname === nick)) {
-                return showToast('이미 등록된 닉네임입니다.', true);
-            }
+            if(fixedDonors.find(d => d.nickname === nick)) return showToast('이미 등록된 닉네임입니다.', true);
 
             fixedDonors.push({ nickname: nick, catId: catId, customName: customName });
             renderFixedDonors();
             
-            // 초기화
             document.getElementById('vip-nickname').value = '';
             document.getElementById('vip-cat-select').value = '';
             document.getElementById('vip-custom-name').value = '';
@@ -218,7 +178,8 @@
             const list = document.getElementById('fixed-donor-list');
             list.innerHTML = '';
             fixedDonors.forEach(d => {
-                const catName = masterDB.cats[d.catId].name;
+                const catObj = masterDB.cats[d.catId];
+                const catName = catObj ? (catObj.default_name || catObj.name) : '알수없음';
                 list.innerHTML += `
                     <div class="fixed-item">
                         <div>
@@ -231,6 +192,9 @@
             });
         }
 
+        // ============================================================================
+        // 4. 저장 (웹소켓 OUT) 및 뷰어 URL 발급
+        // ============================================================================
         function saveAndGenerate() {
             const mappings = [];
             const rows = document.querySelectorAll('.mapping-row');
@@ -244,26 +208,33 @@
                 mappings.push({ foodId: foodId, minCoin: isNaN(minC) ? 0 : minC, maxCoin: isNaN(maxC) ? 999999 : maxC });
             });
 
-            if(!mappingValid || mappings.length === 0) return showToast('먹이 맵핑 조건을 입력해주세요.', true);
+            if(!mappingValid || mappings.length === 0) return showToast('먹이 맵핑 조건을 최소 1개 입력해주세요.', true);
 
-            // 로컬 서버로 전송할 페이로드 (M_begopanyang 에 웹소켓 전송되는 로직 대체)
             const payload = {
                 streamer_id: currentUser,
                 settings: {
                     foodMappings: mappings,
-                    fixedDonors: fixedDonors // VIP 지정 목록 추가됨
+                    fixedDonors: fixedDonors
                 }
             };
-            console.log("로컬 서버로 전송될 페이로드:", payload);
 
-            // [수정된 URL 자동 생성 로직: 어떤 파일명으로 접속해도 절대 깨지지 않음]
-            let currentPath = window.location.href.split('?')[0]; // 쿼리 파라미터 제거
-            let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/')) + '/'; // 현재 경로의 최상위 폴더까지만 정확히 추출
-            
-            document.getElementById('final-url').innerText = `${baseUrl}Viewer.html?user=${encodeURIComponent(currentUser)}`;
+            // 로컬 서버로 실제 저장 패킷 전송
+            if(ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ action: "save_user_data", payload: payload }));
+            } else {
+                return showToast('로컬 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
+            }
+
+            // [URL 생성 완벽 구조화] 어떤 파일명으로 접속하든 무조건 오류 없이 Viewer.html 로 치환
+            const urlObj = new URL(window.location.href);
+            let path = urlObj.pathname;
+            path = path.substring(0, path.lastIndexOf('/') + 1); // 마지막 슬래시 뒤의 파일명 모조리 삭제
+            urlObj.pathname = path + 'Viewer.html';              // 안전하게 Viewer.html만 부착
+            urlObj.search = '?user=' + encodeURIComponent(currentUser); // 쿼리 파라미터 세팅
+
+            document.getElementById('final-url').innerText = urlObj.toString();
             document.getElementById('result-area').style.display = 'block';
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-            showToast('설정이 성공적으로 저장되었습니다!');
         }
 
         function copyUrl() {
