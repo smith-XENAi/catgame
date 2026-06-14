@@ -256,7 +256,10 @@
             };
             console.log("로컬 서버로 전송될 페이로드:", payload);
 
-            const baseUrl = window.location.origin + window.location.pathname.replace('User_Controller.html', '');
+            // [수정된 URL 자동 생성 로직: 어떤 파일명으로 접속해도 절대 깨지지 않음]
+            let currentPath = window.location.href.split('?')[0]; // 쿼리 파라미터 제거
+            let baseUrl = currentPath.substring(0, currentPath.lastIndexOf('/')) + '/'; // 현재 경로의 최상위 폴더까지만 정확히 추출
+            
             document.getElementById('final-url').innerText = `${baseUrl}Viewer.html?user=${encodeURIComponent(currentUser)}`;
             document.getElementById('result-area').style.display = 'block';
             window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
