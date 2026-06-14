@@ -2,71 +2,372 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>배고파냥 - 스트리머 설정 콘솔</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>배고파냥 - STREAMER CONTROLLER</title>
     <style>
-        body { background: #111; color: #fff; font-family: 'Courier New', Courier, monospace; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background: #222; padding: 30px; border-radius: 12px; border: 3px solid #0055aa; }
-        input[type="text"], input[type="number"] { padding: 10px; background: #000; color: #fff; border: 1px solid #555; border-radius: 5px; }
-        .btn { padding: 10px 20px; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; background: #00aa00; color: white; }
-        .btn-random { background: #aa5500; }
-        .section { margin-top: 30px; border-top: 2px solid #444; padding-top: 20px; }
-        .cat-card { background: #333; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #555; }
+        body { background: #0a0e17; color: #e0e6ed; font-family: 'Courier New', Courier, monospace; padding: 20px; line-height: 1.6; margin: 0; }
+        .container { max-width: 900px; margin: 0 auto; background: #131a26; padding: 30px; border-radius: 12px; border: 3px solid #0066cc; box-shadow: 0 0 20px rgba(0, 102, 204, 0.3); }
+        
+        h1 { color: #00ccff; border-bottom: 2px solid #003366; padding-bottom: 10px; margin-top: 0; text-shadow: 0 0 5px rgba(0,204,255,0.5); }
+        h3 { color: #fff; margin-bottom: 15px; }
+
+        .section { background: #1a2332; padding: 20px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #2a3749; display: none; }
+        .section.active { display: block; animation: fadeIn 0.5s; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .btn { padding: 10px 15px; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; background: #004488; color: white; transition: all 0.2s; font-family: inherit; }
+        .btn:hover { background: #0066cc; transform: translateY(-2px); }
+        .btn-success { background: #00aa55; }
+        .btn-success:hover { background: #00cc66; }
+        .btn-warning { background: #cc6600; }
+        .btn-warning:hover { background: #ff8800; }
+        .btn-danger { background: #aa0033; }
+        .btn-danger:hover { background: #cc0044; }
+
+        input[type="text"], input[type="number"] { padding: 12px; background: #080c13; color: #00ffcc; border: 1px solid #004488; border-radius: 5px; font-family: inherit; font-size: 16px; width: calc(100% - 26px); outline: none; transition: border-color 0.2s;}
+        input[type="text"]:focus, input[type="number"]:focus { border-color: #00ccff; box-shadow: 0 0 8px rgba(0, 204, 255, 0.3); }
+
+        /* Login Area */
+        #login-area { text-align: center; padding: 40px 20px; }
+        #login-area input { max-width: 300px; text-align: center; margin-bottom: 20px; display: inline-block; }
+
+        /* Cat Pickup Area */
+        .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .cat-card { background: #080c13; border: 2px solid #2a3749; padding: 15px; border-radius: 8px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .cat-card:hover { border-color: #0066cc; background: #0c121d; }
+        .cat-card.selected { border-color: #00ffcc; box-shadow: 0 0 15px rgba(0, 255, 204, 0.3); }
+
+        /* Stats Area */
+        .stat-box { background: #000; border: 1px dashed #00ccff; padding: 15px; border-radius: 8px; margin-top: 15px; display: none; }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid #111; padding-bottom: 8px; }
+        .stat-value { color: #00ffcc; font-weight: bold; font-size: 18px; }
+
+        /* Food Mapping Area */
+        .mapping-row { display: flex; align-items: center; gap: 10px; background: #080c13; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749;}
+        .mapping-row select { padding: 10px; background: #131a26; color: #fff; border: 1px solid #004488; border-radius: 5px; flex: 2; font-family: inherit; }
+        .mapping-row .coin-input { display: flex; align-items: center; gap: 5px; flex: 3; }
+        .mapping-row input { width: 80px; text-align: center; }
+
+        /* Result Area */
+        .result-panel { background: #000; padding: 20px; border-radius: 8px; border: 1px solid #00aa55; text-align: center; margin-top: 20px; }
+        .url-box { background: #131a26; padding: 15px; border-radius: 5px; font-weight: bold; color: #00ffcc; word-break: break-all; margin: 15px 0; border: 1px dashed #00aa55; font-size: 14px;}
+        
+        .toast { position: fixed; top: 20px; right: 20px; background: #333; color: #fff; padding: 15px 20px; border-radius: 5px; border-left: 5px solid #00ffcc; z-index: 1000; opacity: 0; transition: 0.3s; pointer-events: none; }
+        .toast.show { opacity: 1; }
+        .toast.error { border-left-color: #ff0055; }
     </style>
 </head>
 <body>
+    <div id="toast" class="toast"></div>
+
     <div class="container">
-        <h1 style="color:#00ffcc;">🐈 배고파냥 스트리머 세팅 보드</h1>
+        <h1>🐾 배고파냥 - STREAMER SETTING</h1>
         
-        <div>
-            <h3>1. 라이브 계정 연동</h3>
-            <input type="text" id="streamer-id" placeholder="@아이디 입력 (예: @yoom1111)">
-            <button class="btn" onclick="login()">데이터 불러오기</button>
+        <!-- 1. 로그인 구역 -->
+        <div id="login-area" class="section active">
+            <h3>1. 방송 계정 연동</h3>
+            <p style="color: #8892b0; font-size: 14px;">플랫폼의 고유 아이디(예: @yoom1111)를 입력하여 세션을 시작하세요.</p>
+            <input type="text" id="streamer-id" placeholder="@스트리머ID 입력">
+            <br>
+            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px;" onclick="doLogin()">데이터 로드 및 세팅 시작</button>
         </div>
 
-        <div id="setup-area" style="display:none;" class="section">
-            <h3>2. 출전 고양이 픽업 (최대 3마리)</h3>
-            <p style="font-size:12px; color:#aaa;">고양이를 선택하고 <b>[스탯 리롤]</b> 버튼을 눌러 운명적인 능력치를 획득하세요. (수동 조작 불가)</p>
-            <div id="cat-pickup-list">
-                <!-- 마스터 DB에서 불러와 렌더링될 영역 -->
-            </div>
-            
-            <h3 class="section">3. 후원 먹이 코인 맵핑</h3>
-            <p style="font-size:12px; color:#aaa;">마스터가 등록한 먹이 목록 중, 어느 범위의 코인에서 드롭될지 설정하세요.</p>
-            <div id="food-mapping-list">
-                <!-- 마스터 DB에서 불러와 렌더링될 영역 -->
+        <!-- 2. 대시보드 구역 -->
+        <div id="dashboard-area" style="display:none;">
+            <div style="background: #080c13; padding: 10px 20px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #00ccff;">
+                현재 접속 계정: <b id="display-user-id" style="color:#00ffcc; font-size: 18px;"></b>
             </div>
 
-            <div class="section">
-                <button class="btn" style="width: 100%; font-size: 18px;" onclick="saveAndGenerateURL()">💾 설정 저장 및 방송용 URL 생성</button>
+            <!-- 고양이 픽업 -->
+            <div class="section active">
+                <h3>2. 출전 고양이 픽업 (초기 스탯 부여)</h3>
+                <p style="color: #8892b0; font-size: 12px;">마스터가 등록한 고양이 중 하나를 선택하세요. 스탯은 랜덤 부여되며 수동 입력이 불가합니다.</p>
+                
+                <div class="cat-grid" id="cat-list">
+                    <!-- JS에서 Master DB를 읽어와 렌더링 -->
+                </div>
+
+                <div id="cat-stat-panel" class="stat-box">
+                    <h4 style="margin-top:0; color:#fff;">🎲 운명적 스탯 부여 (총 150pt 무작위 분배)</h4>
+                    <div style="margin-bottom: 15px;">
+                        <input type="text" id="custom-cat-name" placeholder="나만의 고양이 이름 지어주기 (예: 우리집 냥이)" style="width: calc(100% - 26px); margin-bottom: 10px;">
+                    </div>
+                    <div class="stat-row">
+                        <span>⚡ 스피드 (Speed)</span>
+                        <span class="stat-value" id="stat-speed">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>🍗 먹방력 (Eating)</span>
+                        <span class="stat-value" id="stat-eating">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>❤️ 최대 체력 (Max HP)</span>
+                        <span class="stat-value" id="stat-hp">0</span>
+                    </div>
+                    
+                    <button class="btn btn-warning" style="width: 100%; margin-top: 15px; font-size: 16px;" onclick="rerollStats()">🔄 맘에 들지 않나요? 스탯 리롤(Re-roll)하기</button>
+                </div>
             </div>
-            
-            <div id="url-result" style="margin-top: 20px; color: #ffcc00; font-weight: bold; font-size: 14px; text-align: center;"></div>
+
+            <!-- 먹이 맵핑 -->
+            <div class="section active">
+                <h3>3. 후원 먹이 코인 맵핑</h3>
+                <p style="color: #8892b0; font-size: 12px;">시청자가 후원한 코인의 범위(Min~Max)에 따라 어떤 먹이가 떨어질지 설정하세요.</p>
+                
+                <div id="mapping-container">
+                    <!-- 맵핑 로우가 추가될 공간 -->
+                </div>
+                
+                <button class="btn" style="width: 100%; margin-top: 10px;" onclick="addMappingRow()">➕ 새로운 조건 추가하기</button>
+            </div>
+
+            <!-- 저장 및 URL 발급 -->
+            <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 설정 저장 및 송출용 URL 발급</button>
+
+            <div id="result-area" class="result-panel" style="display: none;">
+                <h3 style="color:#00ffcc; margin-top:0;">✅ 모든 설정이 저장되었습니다!</h3>
+                <p style="color: #aaa; font-size: 13px;">아래 URL을 OBS 브라우저 소스에 붙여넣기 하세요. (너비/높이는 화면에 맞게 자유 지정)</p>
+                <div class="url-box" id="final-url"></div>
+                <button class="btn" onclick="copyUrl()">📋 URL 복사하기</button>
+                <button class="btn btn-danger" onclick="window.open(document.getElementById('final-url').innerText, '_blank')">🚀 뷰어 새창 열기 테스트</button>
+            </div>
         </div>
     </div>
 
     <script>
-        // 향후 중앙 서버 통신 로직이 이식될 공간입니다.
-        // 스탯 리롤 버튼 클릭 시 Math.random()을 통해 100포인트를 무작위 분배하는 로직이 여기에 작성됩니다.
-        
-        function login() {
-            const id = document.getElementById('streamer-id').value;
-            if(!id) return alert("아이디를 입력하세요.");
-            document.getElementById('setup-area').style.display = 'block';
-            // DB 로드 로직
+        // ============================================================================
+        // 1. Mock DB (마스터 데이터를 읽어왔다고 가정)
+        // ============================================================================
+        const masterDB = {
+            "cats": {
+                "calico": { "id": "calico", "tier": "free", "default_name": "삼색이" },
+                "cheese": { "id": "cheese", "tier": "free", "default_name": "치즈냥" },
+                "black": { "id": "black", "tier": "paid", "default_name": "까망이" }
+            },
+            "foods": {
+                "f1": { "id": "f1", "name": "멸치 (1pt)" },
+                "f2": { "id": "f2", "name": "참치캔 (30pt)" },
+                "f3": { "id": "f3", "name": "최고급 연어 (100pt)" }
+            }
+        };
+
+        // 유저 세션 데이터 저장소
+        let currentUser = "";
+        let selectedCatId = "";
+        let catStats = { speed: 0, eating: 0, hp: 0 };
+        let mappingCount = 0;
+
+        // ============================================================================
+        // 2. UI Helper Functions
+        // ============================================================================
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.innerText = (isError ? "❌ " : "✅ ") + msg;
+            toast.className = `toast show ${isError ? 'error' : ''}`;
+            setTimeout(() => { toast.classList.remove('show'); }, 3000);
         }
 
-        function saveAndGenerateURL() {
-            const id = document.getElementById('streamer-id').value;
-            // DB 저장(POST) 통신 로직
+        // ============================================================================
+        // 3. Login & Initialization
+        // ============================================================================
+        function doLogin() {
+            const id = document.getElementById('streamer-id').value.trim();
+            if(!id) return showToast('스트리머 ID를 입력해주세요.', true);
+            if(!id.startsWith('@')) return showToast('ID는 @로 시작해야 합니다. (예: @yoom1111)', true);
+
+            currentUser = id;
+            document.getElementById('login-area').style.display = 'none';
+            document.getElementById('dashboard-area').style.display = 'block';
+            document.getElementById('display-user-id').innerText = currentUser;
+
+            initCatList();
+            addMappingRow(); // 기본 맵핑 로우 1개 추가
+            showToast('데이터 로드 완료! 세팅을 진행해주세요.');
+        }
+
+        // ============================================================================
+        // 4. Cat Selection & Random Stats
+        // ============================================================================
+        function initCatList() {
+            const container = document.getElementById('cat-list');
+            container.innerHTML = '';
             
-            // 실제 방송용 화면은 송출 전용 뷰어(Viewer.html)를 띄우도록 설정됩니다.
-            // 깃허브 업로드 시 동일 경로에 Viewer.html 파일이 함께 있어야 합니다.
-            const viewerUrl = `${window.location.origin}${window.location.pathname.replace('begopanyang.html', '')}Viewer.html?user=${id}`;
+            Object.values(masterDB.cats).forEach(cat => {
+                const card = document.createElement('div');
+                card.className = 'cat-card';
+                card.id = `cat-${cat.id}`;
+                card.innerHTML = `
+                    <div style="font-size: 30px; margin-bottom:10px;">🐈</div>
+                    <b style="color:#00ffcc;">${cat.default_name}</b>
+                    <div style="font-size: 11px; color:#888; margin-top:5px;">등급: ${cat.tier.toUpperCase()}</div>
+                `;
+                card.onclick = () => selectCat(cat.id, cat.default_name);
+                container.appendChild(card);
+            });
+        }
+
+        function selectCat(catId, defaultName) {
+            // UI Update
+            document.querySelectorAll('.cat-card').forEach(el => el.classList.remove('selected'));
+            document.getElementById(`cat-${catId}`).classList.add('selected');
             
-            document.getElementById('url-result').innerHTML = `
-                ✅ 설정 저장 완료!<br>
-                방송용 브라우저 소스 URL: <a href="${viewerUrl}" target="_blank" style="color:#00ffcc;">${viewerUrl}</a>
+            selectedCatId = catId;
+            document.getElementById('custom-cat-name').value = `내고양이_${defaultName}`;
+            document.getElementById('cat-stat-panel').style.display = 'block';
+            
+            // 최초 선택 시 리롤 실행
+            rerollStats();
+        }
+
+        function rerollStats() {
+            if(!selectedCatId) return;
+
+            // 총 150 포인트를 3개의 스탯에 무작위 분배 (최소 10 보장)
+            let remaining = 150 - 30; // 30은 기본 보장치
+            
+            let spdAdd = Math.floor(Math.random() * (remaining + 1));
+            remaining -= spdAdd;
+            
+            let eatAdd = Math.floor(Math.random() * (remaining + 1));
+            remaining -= eatAdd;
+            
+            let hpAdd = remaining; // 남은건 다 HP로
+
+            // 섞기 알고리즘 (특정 스탯 편중 방지)
+            const arr = [spdAdd, eatAdd, hpAdd].sort(() => Math.random() - 0.5);
+
+            catStats.speed = 10 + arr[0];
+            catStats.eating = 10 + arr[1];
+            catStats.hp = 10 + arr[2] * 2; // HP는 가중치 2배 부여
+
+            // UI 렌더링 애니메이션 처리
+            animateValue('stat-speed', 0, catStats.speed, 500);
+            animateValue('stat-eating', 0, catStats.eating, 500);
+            animateValue('stat-hp', 0, catStats.hp, 500);
+            
+            showToast('🎲 스탯이 무작위로 재설정 되었습니다!');
+        }
+
+        function animateValue(id, start, end, duration) {
+            const obj = document.getElementById(id);
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                obj.innerHTML = Math.floor(progress * (end - start) + start);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        // ============================================================================
+        // 5. Food Mapping Logic
+        // ============================================================================
+        function addMappingRow() {
+            mappingCount++;
+            const container = document.getElementById('mapping-container');
+            const rowId = `map-row-${mappingCount}`;
+            
+            let foodOptions = `<option value="">-- 드랍될 먹이 선택 --</option>`;
+            Object.values(masterDB.foods).forEach(f => {
+                foodOptions += `<option value="${f.id}">${f.name}</option>`;
+            });
+
+            const row = document.createElement('div');
+            row.className = 'mapping-row';
+            row.id = rowId;
+            row.innerHTML = `
+                <select class="map-food">${foodOptions}</select>
+                <div class="coin-input">
+                    <span style="color:#aaa; font-size:12px;">코인</span>
+                    <input type="number" class="map-min" placeholder="Min" min="0">
+                    <span style="color:#aaa;">~</span>
+                    <input type="number" class="map-max" placeholder="Max" min="0">
+                </div>
+                <button class="btn btn-danger" style="padding: 10px;" onclick="document.getElementById('${rowId}').remove()">X</button>
             `;
+            container.appendChild(row);
+        }
+
+        // ============================================================================
+        // 6. Save & Generate URL
+        // ============================================================================
+        function saveAndGenerate() {
+            if(!selectedCatId) return showToast('출전할 고양이를 선택해주세요.', true);
+
+            const customName = document.getElementById('custom-cat-name').value.trim();
+            if(!customName) return showToast('고양이 이름을 입력해주세요.', true);
+
+            // 맵핑 데이터 수집
+            const mappings = [];
+            const rows = document.querySelectorAll('.mapping-row');
+            let mappingValid = true;
+
+            rows.forEach(row => {
+                const foodId = row.querySelector('.map-food').value;
+                const minC = parseInt(row.querySelector('.map-min').value);
+                const maxC = parseInt(row.querySelector('.map-max').value);
+
+                if(!foodId) { mappingValid = false; return; }
+                
+                mappings.push({
+                    foodId: foodId,
+                    minCoin: isNaN(minC) ? 0 : minC,
+                    maxCoin: isNaN(maxC) ? 999999 : maxC
+                });
+            });
+
+            if(!mappingValid || mappings.length === 0) {
+                return showToast('먹이 맵핑 조건을 정확히 입력해주세요.', true);
+            }
+
+            // (가상) 최종 JSON 페이로드 생성 (user_data.json 구조에 병합용)
+            const payload = {
+                streamer_id: currentUser,
+                settings: { foodMappings: mappings },
+                catStates: {}
+            };
+            payload.catStates[selectedCatId] = {
+                customName: customName,
+                level: 1,
+                exp: 0,
+                speed: catStats.speed,
+                eating: catStats.eating,
+                maxHp: catStats.hp,
+                hp: catStats.hp
+            };
+
+            console.log("서버로 전송될 페이로드:", payload);
+
+            // URL 발급 처리
+            const baseUrl = window.location.origin + window.location.pathname.replace('User_Controller.html', '');
+            const viewerUrl = `${baseUrl}Viewer.html?user=${encodeURIComponent(currentUser)}`;
+            
+            document.getElementById('final-url').innerText = viewerUrl;
+            document.getElementById('result-area').style.display = 'block';
+            
+            // 스크롤 맨 아래로 이동
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            showToast('설정이 성공적으로 저장되었습니다!');
+        }
+
+        function copyUrl() {
+            const urlText = document.getElementById('final-url').innerText;
+            navigator.clipboard.writeText(urlText).then(() => {
+                showToast('URL이 클립보드에 복사되었습니다.');
+            }).catch(err => {
+                // 폴백 복사
+                const textArea = document.createElement("textarea");
+                textArea.value = urlText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textArea);
+                showToast('URL이 클립보드에 복사되었습니다.');
+            });
         }
     </script>
 </body>
