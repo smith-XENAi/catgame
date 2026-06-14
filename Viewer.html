@@ -3,83 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>냥코구치 - 라이브 송출 뷰어</title>
+    <title>배고파냥 - 라이브 송출 뷰어</title>
     <style>
-        /* 기본 레이아웃 및 캔버스 (UI 조작계 완벽히 제거됨) */
+        /* 기본 레이아웃 및 캔버스 (Zero-Control) */
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
         canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; position: relative; z-index: 60; pointer-events: none; }
         
-        /* 송출 화면에서는 어떠한 버튼이나 팝업도 노출되지 않습니다. */
         #connection-status { position: absolute; top: 15px; right: 15px; font-size: 14px; color: #00ff00; z-index: 100; text-shadow: 1px 1px 0 #000; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div id="connection-status">🟢 대기중</div>
+    <div id="connection-status">🔴 서버 연결 대기중...</div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
         /* =========================================================================
-           1. 송출용 뷰어 초기화 및 데이터 로드
+           1. 글로벌 상태 및 로컬 서버 DB 구조
         ========================================================================= */
         const PIXEL_SIZE = 6;
-        let cats = []; 
+        let currentUser = new URLSearchParams(window.location.search).get('user');
+        
+        let userData = { settings: { foodMappings: [], fixedDonors: [] } };
+        let donorHistory = {}; 
+        
+        let activeCats = []; 
         let foods = []; 
         let floatTexts = [];
-        
-        let currentUser = ""; // URL에서 파싱될 스트리머 아이디
-        let masterAssets = {}; 
-        let userData = {};
-        let ws = null; 
+        let ws = null;
 
-        // URL 파라미터에서 스트리머 아이디 추출 (예: ?user=@yoom1111)
-        function getStreamerId() {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('user');
-        }
-
-        async function loadGameData() {
-            currentUser = getStreamerId();
-            if (!currentUser) {
-                document.getElementById('connection-status').innerText = '🔴 오류: 스트리머 아이디가 지정되지 않았습니다.';
-                return;
-            }
-
-            try {
-                // 향후 서버 API 연동 지점 (현재는 구조적 뼈대)
-                const assetRes = await fetch('./master_assets.json?t=' + new Date().getTime());
-                masterAssets = await assetRes.json();
-
-                const userRes = await fetch('./user_data.json?t=' + new Date().getTime());
-                const allUsers = await userRes.json();
-                
-                if(allUsers[currentUser]) {
-                    userData = allUsers[currentUser];
-                    document.getElementById('connection-status').innerText = `🟢 송출 중 [${currentUser}]`;
-                    spawnCats();
-                    initWebSocket();
-                    renderEngine();
-                } else {
-                    document.getElementById('connection-status').innerText = '🔴 오류: 유저 데이터가 없습니다.';
-                }
-            } catch (e) {
-                console.error("데이터 로드 실패", e);
-            }
-        }
+        const LOCAL_CAT_DB_URL = "http://localhost:8001/modules/m_begopanyang/d_catdesign/";
+        const LOCAL_FOOD_DB_URL = "http://localhost:8001/modules/m_begopanyang/d_fooddesign/";
 
         /* =========================================================================
-           2. 물리 엔진 및 렌더링 (기존 로직 100% 보존)
+           2. 캔버스 및 물리 엔진 초기화
         ========================================================================= */
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        
         let oldW = window.innerWidth;
         let oldH = window.innerHeight;
         
         function resize() { 
             const newW = window.innerWidth; 
             const newH = window.innerHeight; 
-            if (cats && cats.length > 0) {
+            
+            if (activeCats && activeCats.length > 0) {
                 const wRatio = oldW ? (newW / oldW) : 1;
-                cats.forEach(c => { c.x *= wRatio; c.y = newH - 100; });
+                activeCats.forEach(c => { c.x *= wRatio; c.y = newH - 100; });
             }
             if (foods && foods.length > 0) {
                 const wRatio = oldW ? (newW / oldW) : 1;
@@ -88,6 +58,7 @@
                     if (f.isGrounded) f.y = newH - 100;
                 });
             }
+
             canvas.width = newW; 
             canvas.height = newH; 
             oldW = newW;
@@ -96,23 +67,30 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // 기존 Cat 클래스 구조 보존 (DB 참조 방식만 변경)
+        /* =========================================================================
+           3. 원본 알고리즘 복구 (Cat, Food 클래스) + 랭킹 시스템 융합
+        ========================================================================= */
         class Cat {
-            constructor(id) {
-                this.id = id;
-                this.asset = masterAssets.cats[id];
-                this.stateData = userData.catStates[id];
+            constructor(donorData, rank) {
+                this.donorName = donorData.nickname;
+                this.totalCoin = donorData.totalCoin;
+                this.rank = rank;
+                this.catId = donorData.catId;
                 
-                this.x = Math.random() * (canvas.width - 100) + 50;
+                // 원본 stateData 복구 (스탯, 레벨업 관장)
+                this.stateData = donorData.stats; 
+                
+                // 밀어내기 등장 위치 설정 (화면 밖 우측)
+                this.x = window.innerWidth + 100;
                 this.y = canvas.height - 100;
-                this.state = 'IDLE'; 
+                this.state = 'ENTER'; // 기존 IDLE 대신 ENTER로 시작
+                this.direction = -1; // 왼쪽으로 뛰어들어옴
+                
                 this.targetFood = null;
-                this.direction = 1; 
-                this.hp = this.stateData.hp;
-
                 this.wanderTimer = Math.random() * 3000 + 6000; 
                 this.wanderX = null;
 
+                // DOM 이미지 엘리먼트 생성 (원본)
                 this.domElement = document.createElement('img');
                 this.domElement.style.position = 'absolute';
                 this.domElement.style.pointerEvents = 'none';
@@ -123,68 +101,387 @@
                 document.body.appendChild(this.domElement);
                 this.currentAnimSrc = null;
             }
-            // (update 및 draw 로직은 지시사항에 따라 기존 코드 그대로 유지됨. 실제 구동시 이식)
-            update() { /* 기존 업데이트 로직 */ }
-            draw() { /* 기존 드로우 로직 */ }
-        }
 
-        function spawnCats() {
-            cats.forEach(c => { if(c.domElement) c.domElement.remove(); });
-            cats = [];
-            Object.keys(userData.catStates).forEach(id => {
-                cats.push(new Cat(id));
-            });
+            updateData(totalCoin, rank) {
+                this.totalCoin = totalCoin;
+                this.rank = rank;
+            }
+
+            exit() {
+                this.state = 'EXIT';
+            }
+
+            update() {
+                this.speedPerFrame = this.stateData.speed / 60;
+                this.eatPerFrame = this.stateData.eating / 60;
+
+                // --- 1. 신규 랭킹 밀어내기 로직 (ENTER/EXIT) ---
+                if (this.state === 'ENTER') {
+                    this.x -= Math.max(3, this.speedPerFrame * 2);
+                    this.direction = -1;
+                    if (this.x < window.innerWidth - 150) this.state = 'IDLE';
+                    return;
+                }
+                if (this.state === 'EXIT') {
+                    this.x += Math.max(4, this.speedPerFrame * 3);
+                    this.direction = 1;
+                    if (this.x > window.innerWidth + 150) {
+                        this.domElement.remove();
+                        activeCats = activeCats.filter(c => c !== this);
+                    }
+                    return;
+                }
+
+                // --- 2. 원본 알고리즘 100% 복원 구간 시작 ---
+                if (this.stateData.hp <= 0) this.state = 'SLEEPING';
+                
+                if (this.state === 'SLEEPING') {
+                    this.stateData.hp += (this.stateData.maxHp * 0.03) / 60; 
+                    if (this.stateData.hp >= this.stateData.maxHp * 0.3) {
+                        this.state = 'IDLE'; 
+                    }
+                    return; 
+                }
+
+                let availableFoods = foods.filter(f => f.isGrounded);
+                if ((this.state === 'IDLE' || this.state === 'MOVE' || this.state === 'WANDER') && availableFoods.length > 0) {
+                    availableFoods.sort((a, b) => Math.abs(a.x - this.x) - Math.abs(b.x - this.x));
+                    this.targetFood = availableFoods[0];
+                    this.state = 'MOVE';
+                } else if (availableFoods.length === 0 && this.state === 'MOVE') {
+                    this.state = 'IDLE';
+                    this.targetFood = null;
+                }
+
+                if (this.state === 'IDLE') {
+                    this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + (this.stateData.maxHp * 0.02) / 60);
+                    this.wanderTimer--;
+                    if (this.wanderTimer <= 0) {
+                        this.wanderX = Math.random() * (canvas.width - 100) + 50;
+                        this.state = 'WANDER';
+                        this.wanderTimer = Math.random() * 3000 + 6000; 
+                    }
+                }
+
+                if (this.state === 'WANDER') {
+                    const dist = this.wanderX - this.x;
+                    if (Math.abs(dist) < 5) {
+                        this.state = 'IDLE';
+                    } else {
+                        this.direction = dist > 0 ? 1 : -1;
+                        this.x += Math.sign(dist) * this.speedPerFrame;
+                        this.stateData.hp -= 1 / 60; 
+                    }
+                }
+
+                if (this.state === 'MOVE' && this.targetFood) {
+                    if (!this.targetFood.isGrounded) {
+                        this.state = 'IDLE';
+                        this.targetFood = null;
+                    } else {
+                        const dist = this.targetFood.x - this.x;
+                        if (Math.abs(dist) < 5) {
+                            this.state = 'EATING';
+                        } else {
+                            this.direction = dist > 0 ? 1 : -1;
+                            this.x += Math.sign(dist) * this.speedPerFrame;
+                            this.stateData.hp -= 1 / 60; 
+                        }
+                    }
+                }
+
+                if (this.state === 'EATING' && this.targetFood) {
+                    if (this.targetFood.pt <= 0) {
+                        this.state = 'IDLE';
+                        this.targetFood = null;
+                    } else {
+                        let eatAmt = Math.min(this.eatPerFrame, this.targetFood.pt);
+                        this.targetFood.pt -= eatAmt;
+                        this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + eatAmt);
+                        this.stateData.exp += eatAmt;
+                        this.stateData.hp -= 1 / 60; 
+
+                        this.targetFood.w = Math.max(0, (this.targetFood.pt / this.targetFood.maxPt) * 100);
+
+                        const reqExp = 100 + ((this.stateData.level - 1) * 200);
+                        if (this.stateData.exp >= reqExp) {
+                            this.stateData.level++;
+                            this.stateData.exp -= reqExp;
+                            
+                            for(let i=0; i<20; i++) {
+                                let r = Math.floor(Math.random() * 3);
+                                if(r === 0) this.stateData.speed += 1;
+                                else if(r === 1) this.stateData.eating += 1;
+                                else this.stateData.maxHp += 1;
+                            }
+                            this.stateData.hp = this.stateData.maxHp; 
+
+                            floatTexts.push({ text: "✨LEVEL UP!✨", x: this.x, y: this.y - 80, life: 100, color: '#00ffcc' });
+                        }
+                    }
+                }
+                // --- 원본 알고리즘 복원 완료 ---
+            }
+
+            draw() {
+                // 디자인 DB 로컬 서버 경로 지정
+                const baseUrl = `${LOCAL_CAT_DB_URL}${this.catId}`;
+                const anims = {
+                    IDLE: `${baseUrl}_idle.gif`,
+                    MOVE: `${baseUrl}_move.gif`,
+                    EATING: `${baseUrl}_eat.gif`,
+                    SLEEPING: `${baseUrl}_sleep.gif`
+                };
+
+                let targetAnim = anims[this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' ? 'MOVE' : this.state];
+                if (!targetAnim && this.state !== 'SLEEPING') targetAnim = anims['IDLE'];
+
+                if (targetAnim) {
+                    if (this.currentAnimSrc !== targetAnim) {
+                        this.domElement.src = targetAnim;
+                        this.currentAnimSrc = targetAnim;
+                    }
+                    this.domElement.style.display = 'block';
+                    this.domElement.style.left = this.x + 'px';
+                    this.domElement.style.top = (this.y + (PIXEL_SIZE * 8)) + 'px';
+                    this.domElement.style.width = '90px'; 
+                    this.domElement.style.transform = `translate(-50%, -100%) scaleX(${this.direction})`;
+                } else {
+                    this.domElement.style.display = 'none';
+                }
+
+                // 캔버스 UI 렌더링 (랭킹 + 이름 + 레벨 + 코인)
+                const titleText = `[${this.rank}위] LV${this.stateData.level}. ${this.stateData.name} (${this.donorName} / ${this.totalCoin}C)`;
+                ctx.font = 'bold 13px "Courier New"';
+                const textWidth = ctx.measureText(titleText).width;
+                const barWidth = 60; 
+                
+                const uiMaxWidth = Math.max(textWidth, barWidth);
+                const startX = this.x - (uiMaxWidth / 2);
+                
+                const textY = this.y - 85; 
+                const expGaugeY = textY + 10;
+                const hpGaugeY = expGaugeY + 8;
+
+                const textOffsetX = startX + (uiMaxWidth - textWidth) / 2;
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+                ctx.strokeText(titleText, textOffsetX, textY);
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillText(titleText, textOffsetX, textY);
+                
+                const gaugeStartX = startX + (uiMaxWidth - barWidth) / 2;
+                
+                // EXP Bar
+                const reqExp = 100 + ((this.stateData.level - 1) * 200);
+                const expWidth = Math.min(barWidth, (this.stateData.exp / reqExp) * barWidth);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(gaugeStartX, expGaugeY, barWidth, 6);
+                ctx.fillStyle = '#ffcc00'; 
+                ctx.fillRect(gaugeStartX, expGaugeY, expWidth, 6);
+
+                // HP Bar
+                const hpWidth = Math.max(0, (this.stateData.hp / this.stateData.maxHp) * barWidth);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(gaugeStartX, hpGaugeY, barWidth, 6);
+                ctx.fillStyle = '#ff3333'; 
+                ctx.fillRect(gaugeStartX, hpGaugeY, hpWidth, 6);
+
+                if (this.state === 'SLEEPING' && !targetAnim) {
+                    ctx.fillStyle = '#aaaaff';
+                    ctx.fillText('Zzz..', this.x - 15, textY - 15);
+                }
+            }
         }
 
         function spawnFood(mappingData, quantity = 1) {
-            // 기존 먹이 생성 로직 (masterAssets.foods 참조)
+            for(let i=0; i<quantity; i++) {
+                // 디자인 DB 로컬 서버 경로 지정
+                const imgUrl = `${LOCAL_FOOD_DB_URL}${mappingData.foodId}.png`;
+
+                let fData = {
+                    mapId: mappingData.foodId,
+                    pt: Number(mappingData.pt) || 10,
+                    maxPt: Number(mappingData.pt) || 10,
+                    x: Math.random() * (canvas.width - 100) + 50,
+                    y: -100 - (i * 20), 
+                    w: 100, 
+                    isGrounded: false,
+                    domElement: document.createElement('img')
+                };
+
+                fData.domElement.src = imgUrl;
+                fData.domElement.style.position = 'absolute';
+                fData.domElement.style.pointerEvents = 'none';
+                fData.domElement.style.zIndex = '40';
+                fData.domElement.style.imageRendering = 'pixelated';
+                fData.domElement.style.objectFit = 'cover';
+                fData.domElement.style.objectPosition = 'left top';
+                document.body.appendChild(fData.domElement);
+
+                foods.push(fData);
+            }
         }
 
         function renderEngine() {
-            // 기존 렌더 엔진 로직 보존
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            // ... (생략) ...
+
+            for (let i = foods.length - 1; i >= 0; i--) {
+                let f = foods[i];
+                const targetY = canvas.height - 100; 
+                
+                if (f.y < targetY) {
+                    f.y += 6; 
+                } else {
+                    f.y = targetY;
+                    f.isGrounded = true; 
+                }
+                
+                const drawX = f.x - 50;
+                const drawY = f.y - 50;
+                
+                f.domElement.style.left = drawX + 'px';
+                f.domElement.style.top = drawY + 'px';
+                f.domElement.style.width = f.w + 'px';
+                f.domElement.style.height = '100px';
+
+                if (f.pt <= 0 || f.w <= 0) {
+                    if (f.domElement && f.domElement.parentNode) f.domElement.remove();
+                    foods.splice(i, 1);
+                }
+            }
+
+            activeCats.forEach(c => { c.update(); c.draw(); });
+
+            for (let i = floatTexts.length - 1; i >= 0; i--) {
+                let ft = floatTexts[i];
+                ctx.fillStyle = ft.color;
+                ctx.font = 'bold 20px "Courier New"';
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ft.y -= 1.5;
+                ft.life--;
+                if (ft.life <= 0) floatTexts.splice(i, 1);
+            }
+
             requestAnimationFrame(renderEngine);
         }
 
         /* =========================================================================
-           3. 패킷 선별 수신 시스템 (Filtering)
+           4. 후원 처리 및 밀어내기 랭킹 시스템 로직
+        ========================================================================= */
+        function processDonation(donorName, coin) {
+            if (!donorHistory[donorName]) {
+                const fixed = (userData.settings.fixedDonors || []).find(d => d.nickname === donorName);
+                
+                // 신규 유저 스탯 생성 (원본 150pt 알고리즘 적용)
+                let remaining = 120; // 30 기본 보장 후 랜덤 120
+                let spd = 10 + Math.floor(Math.random() * 40); remaining -= spd;
+                let eat = 10 + Math.floor(Math.random() * 40); remaining -= eat;
+                let hp = 10 + (remaining * 2); // 체력 가중치
+
+                let catId = fixed ? fixed.catId : "calico"; 
+                let customName = fixed ? fixed.customName : donorName;
+
+                donorHistory[donorName] = { 
+                    nickname: donorName, 
+                    totalCoin: 0, 
+                    catId: catId, 
+                    stats: { name: customName, level: 1, exp: 0, speed: spd, eating: eat, maxHp: hp, hp: hp } 
+                };
+            }
+            
+            donorHistory[donorName].totalCoin += coin;
+
+            // 먹이 투하 (맵핑 기준)
+            for (let m of userData.settings.foodMappings) {
+                if (coin >= m.minCoin && coin <= m.maxCoin) {
+                    m.pt = m.pt || (coin * 10); // 기본 경험치 보정
+                    spawnFood(m, 1);
+                    break;
+                }
+            }
+
+            updateRankings();
+        }
+
+        function updateRankings() {
+            const sortedDonors = Object.values(donorHistory).sort((a, b) => b.totalCoin - a.totalCoin);
+            const top3 = sortedDonors.slice(0, 3);
+            const top3Nicknames = top3.map(d => d.nickname);
+
+            // 1위 ~ 3위 고양이 생성 및 업데이트
+            top3.forEach((donor, index) => {
+                const rank = index + 1;
+                const existingCat = activeCats.find(c => c.donorName === donor.nickname && c.state !== 'EXIT');
+                
+                if (existingCat) {
+                    existingCat.updateData(donor.totalCoin, rank);
+                } else {
+                    activeCats.push(new Cat(donor, rank)); // 새로 뛰어들어옴
+                }
+            });
+
+            // 3위 밖으로 밀려난 고양이 퇴장 처리
+            activeCats.forEach(cat => {
+                if (!top3Nicknames.includes(cat.donorName) && cat.state !== 'EXIT') {
+                    cat.exit(); // 화면 밖으로 도망감
+                }
+            });
+        }
+
+        /* =========================================================================
+           5. 코어 백엔드 웹소켓 통신 (목업 완전 제거)
         ========================================================================= */
         function initWebSocket() {
             if (ws) { ws.onclose = null; ws.close(); }
-            try { ws = new WebSocket(masterAssets.system.wsUrl); } catch (e) { return; }
+            const statusEl = document.getElementById('connection-status');
+
+            try { ws = new WebSocket("ws://127.0.0.1:8001"); } catch (e) { return; }
+
+            ws.onopen = () => {
+                statusEl.innerText = "🟢 데이터 동기화 중...";
+                // 연결 즉시 M_begopanyang 에 로컬 DB 로드 요청 (SignalBroker 우회)
+                ws.send(JSON.stringify({ action: "load_db", payload: {} }));
+            };
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 
-                // [신규 핵심 로직] 내 방송(currentUser)에서 발생한 패킷만 선별
-                if(data.target_broadcaster !== currentUser) return;
-
-                if(data.action === "chat_event" && data.is_gift) {
-                    const coinValue = parseInt(data.coin_value) || 0;
-                    const giftCount = parseInt(data.gift_count) || 1;
-
-                    for(let m of userData.settings.foodMappings) {
-                        const minC = parseInt(m.minCoin);
-                        const maxC = parseInt(m.maxCoin);
-                        let coinMatched = true;
-                        
-                        if (!isNaN(minC) && coinValue < minC) coinMatched = false;
-                        if (!isNaN(maxC) && coinValue > maxC) coinMatched = false;
-                        if (isNaN(minC) && isNaN(maxC)) coinMatched = false;
-
-                        if(coinMatched) {
-                            spawnFood(m, giftCount);
-                            break; 
-                        }
+                // 1. 초기 DB 로드 응답
+                if (data.action === "load_db_res") {
+                    const db = data.data;
+                    if (db.user_data && db.user_data[currentUser]) {
+                        userData = db.user_data[currentUser];
+                        donorHistory = db.donor_history || {};
+                        statusEl.innerText = `🟢 송출 중 [${currentUser}]`;
+                        updateRankings(); // 기존 후원 기록이 있다면 Top 3 즉시 복구
+                    } else {
+                        statusEl.innerText = "🔴 스트리머 DB 정보 없음 (설정 컨트롤러를 먼저 저장하세요)";
                     }
                 }
+                
+                // 2. 실시간 후원 패킷 수신
+                if (data.action === "live_donation" && data.target_broadcaster === currentUser) {
+                    processDonation(data.donor_nickname, data.coin_value);
+                }
+                // (호환성) 범용 채팅 패킷 중 후원 속성
+                else if (data.action === "chat_event" && data.is_gift) {
+                    if (data.target_broadcaster && data.target_broadcaster !== currentUser) return;
+                    processDonation(data.user || data.donor_nickname, data.coin_value);
+                }
             };
-            ws.onclose = () => { setTimeout(initWebSocket, 3000); };
+
+            ws.onclose = () => {
+                statusEl.innerText = "🔴 연결 끊김 (재접속 중...)";
+                statusEl.style.color = "#ff0000";
+                setTimeout(initWebSocket, 3000);
+            };
         }
 
-        // 뷰어 단독 구동
-        loadGameData();
+        // 실행
+        requestAnimationFrame(renderEngine);
+        initWebSocket();
+
     </script>
 </body>
 </html>
