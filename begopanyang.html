@@ -152,14 +152,14 @@
         }
 
         function initWebSocket() {
-        if(ws) ws.close();
-        
-        try {
-            // [수정] 코어 시스템이 할당한 포트를 파라미터에서 추출하여 동적 연결
-            const urlParams = new URLSearchParams(window.location.search);
-            const wsPort = urlParams.get('port') || '8001';
-            ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
-        } catch(e) {
+            if(ws) ws.close();
+            
+            try {
+                // [수정] 코어가 할당한 모듈 전용 포트(기본값 8340)를 파라미터에서 추출하여 동적 연결
+                const urlParams = new URLSearchParams(window.location.search);
+                const wsPort = urlParams.get('port') || '8340';
+                ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
+            } catch(e) {
             showToast("코어 서버가 켜져있는지 확인해주세요.", true);
             return;
         }
@@ -335,20 +335,19 @@
             }
 
             // [자동 URL 생성] 백엔드에서 전달받은 autoNgrokUrl을 뷰어 주소에 몰래 삽입
-        const urlObj = new URL(window.location.href);
-        let path = urlObj.pathname;
-        path = path.substring(0, path.lastIndexOf('/') + 1); 
-        urlObj.pathname = path + 'Viewer.html';              
-        
-        urlObj.searchParams.set('user', currentUser);
-        
-        // [수정] 할당받은 로컬 포트를 뷰어 URL에도 그대로 전달
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('port')) urlObj.searchParams.set('port', urlParams.get('port'));
-
-        if (autoNgrokUrl) {
-            urlObj.searchParams.set('ws', autoNgrokUrl);
-        }
+            const urlObj = new URL(window.location.href);
+            let path = urlObj.pathname;
+            path = path.substring(0, path.lastIndexOf('/') + 1); 
+            urlObj.pathname = path + 'Viewer.html';              
+            
+            urlObj.searchParams.set('user', currentUser);
+            // [수정] 할당받은 동적 포트(8340) 정보를 뷰어 URL에도 그대로 전달
+            const urlParams = new URLSearchParams(window.location.search);
+            const wsPort = urlParams.get('port') || '8340';
+            urlObj.searchParams.set('port', wsPort);
+            if (autoNgrokUrl) {
+                urlObj.searchParams.set('ws', autoNgrokUrl);
+            }
 
             document.getElementById('final-url').innerText = urlObj.toString();
             document.getElementById('result-area').style.display = 'block';
