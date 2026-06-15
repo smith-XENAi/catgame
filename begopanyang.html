@@ -28,7 +28,7 @@
 
         /* Login Area */
         #login-area { text-align: center; padding: 40px 20px; }
-        #login-area input { max-width: 300px; text-align: center; margin-bottom: 10px; display: inline-block; }
+        #login-area input { max-width: 350px; text-align: center; margin-bottom: 10px; display: inline-block; }
 
         /* Fixed Donor Area */
         .fixed-donor-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; background: #080c13; padding: 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749; align-items: center; }
@@ -58,11 +58,13 @@
         
         <!-- 1. 로그인 구역 -->
         <div id="login-area" class="section active">
-            <h3>1. 라이브 계정 연동</h3>
-            <p style="color: #8892b0; font-size: 14px;">플랫폼의 고유 아이디(예: @yoom1111)를 입력하세요. 코어와 자동으로 통신합니다.</p>
-            <input type="text" id="streamer-id" placeholder="@스트리머ID 입력">
+            <h3>1. 라이브 계정 및 코어 터널 연동</h3>
+            <p style="color: #8892b0; font-size: 14px;">플랫폼의 고유 아이디와 로컬 코어가 뚫어둔 Ngrok 터널 주소를 입력하세요.<br>(최초 1회 인증 시 브라우저에 안전하게 저장됩니다.)</p>
+            <input type="text" id="streamer-id" placeholder="@스트리머ID 입력 (예: @yoom1111)">
             <br>
-            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px; margin-top:10px;" onclick="doLogin()">데이터 연동 및 세팅 시작</button>
+            <input type="text" id="ngrok-url" placeholder="Ngrok 주소 입력 (예: https://abcd.ngrok-free.app)">
+            <br>
+            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px; margin-top:15px;" onclick="doLogin()">터널 통신 테스트 및 세팅 시작</button>
         </div>
 
         <!-- 2. 대시보드 구역 -->
@@ -100,10 +102,11 @@
             </div>
 
             <!-- 저장 및 URL 발급 -->
-            <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 로컬 서버 설정 저장 및 송출용 URL 발급</button>
+            <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 서버 설정 저장 및 송출용 URL 발급</button>
 
             <div id="result-area" class="result-panel" style="display: none;">
-                <h3 style="color:#00ffcc; margin-top:0;">✅ 모든 설정이 저장되었습니다!</h3>
+                <h3 style="color:#00ffcc; margin-top:0;">✅ 모든 설정이 코어에 저장되었습니다!</h3>
+                <p style="color: #8892b0; font-size: 13px;">아래 URL을 OBS 브라우저 소스에 복사하여 붙여넣으세요.</p>
                 <div class="url-box" id="final-url"></div>
                 <button class="btn" onclick="copyUrl()">📋 URL 복사하기</button>
                 <button class="btn btn-danger" onclick="window.open(document.getElementById('final-url').innerText, '_blank')">🚀 뷰어 새창 열기 테스트</button>
@@ -113,18 +116,22 @@
 
     <script>
         // ============================================================================
-        // 1. 상태 변수
+        // 1. 상태 변수 및 유틸
         // ============================================================================
         let masterDB = { cats: {}, foods: {} };
         let currentUser = "";
         let mappingCount = 0;
         let fixedDonors = [];
         let ws = null;
-        let autoNgrokUrl = ""; // 백엔드에서 자동으로 전달받을 터널 주소
+        
+        let autoNgrokUrl = ""; // 백엔드에서 내려주는 자동 터널 주소 (Fallback)
+        let manualNgrokUrl = ""; // 사용자가 직접 핑(Ping) 테스트를 통과시킨 터널 주소 (Primary)
 
         window.onload = () => {
             const savedId = localStorage.getItem('bego_user_id');
+            const savedNgrok = localStorage.getItem('bego_ngrok_url');
             if(savedId) document.getElementById('streamer-id').value = savedId;
+            if(savedNgrok) document.getElementById('ngrok-url').value = savedNgrok;
         };
 
         function showToast(msg, isError = false) {
@@ -135,48 +142,89 @@
         }
 
         // ============================================================================
-        // 2. 로그인 및 자동 데이터 로드 (로컬 호스트 다이렉트 연결)
+        // 2. 로그인 및 Ping 테스트 로직
         // ============================================================================
-        function doLogin() {
+        // [신규] Ngrok HTTP 브라우저 경고창(Interstitial)을 우회하기 위해 웹소켓 프로브(Probe)로 핑을 뚫습니다.
+        function testNgrokConnection(ngrokUrl) {
+            return new Promise((resolve, reject) => {
+                let wsBase = ngrokUrl.replace("https://", "wss://").replace("http://", "ws://");
+                if (!wsBase.startsWith("ws")) wsBase = "wss://" + wsBase;
+                
+                const probeWsUrl = `${wsBase}/ws`;
+                const tempWs = new WebSocket(probeWsUrl);
+                
+                const timeout = setTimeout(() => {
+                    tempWs.close();
+                    reject(new Error("Timeout"));
+                }, 5000); // 5초 타임아웃 핑 검증
+
+                tempWs.onopen = () => {
+                    clearTimeout(timeout);
+                    tempWs.close();
+                    resolve(true); // 통신 성공
+                };
+
+                tempWs.onerror = (e) => {
+                    clearTimeout(timeout);
+                    reject(e);
+                };
+            });
+        }
+
+        async function doLogin() {
             const id = document.getElementById('streamer-id').value.trim();
-            if(!id) return showToast('스트리머 ID를 입력해주세요.', true);
+            let ngrok = document.getElementById('ngrok-url').value.trim();
             
-            localStorage.setItem('bego_user_id', id);
+            if(!id) return showToast('스트리머 ID를 입력해주세요.', true);
+            if(!ngrok) return showToast('Ngrok 주소를 입력해주세요.', true);
+            
+            // 프로토콜 규격 정리
+            ngrok = ngrok.replace(/\/+$/, "");
+            if(!ngrok.startsWith('http')) ngrok = 'https://' + ngrok;
 
-            currentUser = id;
-            document.getElementById('login-area').style.display = 'none';
-            document.getElementById('dashboard-area').style.display = 'block';
-            document.getElementById('display-user-id').innerText = currentUser;
+            showToast('🔄 코어 통신망(Ngrok) 개통 확인 중...', false);
 
-            initWebSocket(); 
+            try {
+                // 통신망이 실제로 열려있는지 1차 핑(Ping) 테스트 수행
+                await testNgrokConnection(ngrok);
+                
+                showToast('터널 통신 성공! 데이터를 불러옵니다.');
+                
+                // 데이터 영구 저장
+                localStorage.setItem('bego_user_id', id);
+                localStorage.setItem('bego_ngrok_url', ngrok);
+                
+                currentUser = id;
+                manualNgrokUrl = ngrok; // 검증된 주소 글로벌 바인딩
+
+                document.getElementById('login-area').style.display = 'none';
+                document.getElementById('dashboard-area').style.display = 'block';
+                document.getElementById('display-user-id').innerText = currentUser;
+
+                // 본격적인 소켓 데이터 로드 파이프라인 가동
+                initWebSocket(); 
+            } catch (error) {
+                showToast('Ngrok 연결 실패: 로컬 코어가 켜져있는지 확인하세요.', true);
+                console.error("Ping Test Failed:", error);
+            }
         }
 
         function initWebSocket() {
             if(ws) ws.close();
             
             try {
-                // [수정] 보안 통신망 분리: 기본 포트를 8001로 맞추고 Ngrok 주소 존재 시 wss:// 기반의 /ws 엔드포인트로 치환
-                const urlParams = new URLSearchParams(window.location.search);
-                const ngrokWs = urlParams.get('ws');
-                const wsPort = urlParams.get('port') || '8001';
-
-                let targetWsUrl = `ws://127.0.0.1:${wsPort}/ws`;
-
-                if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
-                    let cleanNgrok = ngrokWs.replace(/\/+$/, "");
-                    let wsBase = cleanNgrok.replace("https://", "wss://").replace("http://", "ws://");
-                    if (!wsBase.startsWith("ws")) wsBase = "wss://" + wsBase;
-                    targetWsUrl = `${wsBase}/ws`;
-                }
+                // Ping 테스트를 통과한 manualNgrokUrl을 메인 소켓 주소로 안전하게 치환
+                let wsBase = manualNgrokUrl.replace("https://", "wss://").replace("http://", "ws://");
+                if (!wsBase.startsWith("ws")) wsBase = "wss://" + wsBase;
                 
+                const targetWsUrl = `${wsBase}/ws`;
                 ws = new WebSocket(targetWsUrl);
             } catch(e) {
-                showToast("코어 서버가 켜져있는지 확인해주세요.", true);
+                showToast("웹소켓 주소 바인딩에 실패했습니다.", true);
                 return;
             }
 
             ws.onopen = () => {
-                showToast('🟢 코어 서버 자동 연동 완료. 데이터를 불러옵니다.');
                 ws.send(JSON.stringify({ action: "load_db", payload: {} }));
             };
 
@@ -186,7 +234,7 @@
                 if (data.action === "load_db_res") {
                     const db = data.data;
                     
-                    // [핵심] 백엔드가 생성해둔 Ngrok 터널 주소를 몰래 전달받아 저장함
+                    // 백엔드가 감지한 주소가 있다면 백업용으로 기록
                     autoNgrokUrl = db.ngrok_url || "";
 
                     if(db.master_assets) {
@@ -233,7 +281,7 @@
         }
 
         // ============================================================================
-        // 3. UI 렌더링 및 제어
+        // 3. UI 렌더링 및 제어 (변경 없음)
         // ============================================================================
         function initSelectors() {
             const catSelect = document.getElementById('vip-cat-select');
@@ -314,7 +362,7 @@
         }
 
         // ============================================================================
-        // 4. 저장 및 자동 URL 발급
+        // 4. 저장 및 자동 URL 발급 (수동 주소 우선 적용)
         // ============================================================================
         function saveAndGenerate() {
             const mappings = [];
@@ -345,20 +393,21 @@
                 return showToast('코어 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
             }
 
-            // [자동 URL 생성] 백엔드에서 전달받은 autoNgrokUrl을 뷰어 주소에 몰래 삽입
             const urlObj = new URL(window.location.href);
             let path = urlObj.pathname;
             path = path.substring(0, path.lastIndexOf('/') + 1); 
-            // 마스터가 디렉터리 내에서 사용 중이신 실제 뷰어 파일명(Viewer.html 또는 Viewer (1).html 등)에 맞춰 작성하십시오.
             urlObj.pathname = path + 'Viewer.html';              
             
             urlObj.searchParams.set('user', currentUser);
-            // [수정] 뷰어가 백엔드와 다이렉트로 통신할 수 있도록 전용 포트 정보를 함께 인계합니다.
+            
             const urlParams = new URLSearchParams(window.location.search);
             const wsPort = urlParams.get('port') || '8001';
             urlObj.searchParams.set('port', wsPort);
-            if (autoNgrokUrl) {
-                urlObj.searchParams.set('ws', autoNgrokUrl);
+            
+            // [검증 완료] 사용자가 직접 입력하고 핑을 통과시킨 주소를 최우선적으로 뷰어에 인계
+            const finalNgrok = manualNgrokUrl || autoNgrokUrl;
+            if (finalNgrok) {
+                urlObj.searchParams.set('ws', finalNgrok);
             }
 
             document.getElementById('final-url').innerText = urlObj.toString();
