@@ -448,79 +448,30 @@
             if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); }
             const statusEl = document.getElementById('connection-status');
             
-            try { 
-                const urlParams = new URLSearchParams(window.location.search);
-                const ngrokWs = urlParams.get('ws');
-                const wsPort = urlParams.get('port') || '8340';
-                
-                let targetWsUrl = `ws://127.0.0.1:${wsPort}`;
-                
-                if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined") {
-                    // Ngrok 터널 사용 시 wss 프로토콜로 자동 변환
-                    targetWsUrl = ngrokWs.replace("https://", "wss://").replace("http://", "ws://");
-                }
-                
-                console.log("연결 시도 대상:", targetWsUrl);
-                ws = new WebSocket(targetWsUrl); 
-        
-                ws.onopen = () => {
-                    statusEl.innerText = "🟢 서버 연결 성공";
-                    statusEl.style.color = "#00ff00";
-                };
-        
-                ws.onerror = (e) => {
-                    statusEl.innerText = "🟡 연결 중... (서버 재시작 대기)";
-                };
-                
-            } catch (e) { 
-                console.error("웹소켓 초기화 오류:", e);
-                setTimeout(initWebSocket, 3000);
-                return; 
-            }
-        }
+            // 코어가 할당한 8340 포트로 접속
+            const wsPort = '8340';
+            const targetWsUrl = `ws://127.0.0.1:${wsPort}`;
             
+            console.log("코어 통신 포트 접속 시도:", targetWsUrl);
+            
+            ws = new WebSocket(targetWsUrl); 
+        
             ws.onopen = () => {
-                statusEl.innerText = "🟢 데이터 동기화 중...";
-                // 연결 즉시 M_begopanyang 에 로컬 DB 로드 요청 (SignalBroker 우회)
-                ws.send(JSON.stringify({ action: "load_db", payload: {} }));
+                statusEl.innerText = "🟢 시스템 연결 성공";
+                statusEl.style.color = "#00ff00";
             };
-
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                
-                // 1. 초기 DB 로드 응답
-                if (data.action === "load_db_res") {
-                    const db = data.data;
-                    if (db.user_data && db.user_data[currentUser]) {
-                        userData = db.user_data[currentUser];
-                        donorHistory = db.donor_history || {};
-                        statusEl.innerText = `🟢 송출 중 [${currentUser}]`;
-                        updateRankings(); // 기존 후원 기록이 있다면 Top 3 즉시 복구
-                    } else {
-                        statusEl.innerText = "🔴 스트리머 DB 정보 없음 (설정 컨트롤러를 먼저 저장하세요)";
-                    }
-                }
-                
-                // 2. 실시간 후원 패킷 수신
-                if (data.action === "live_donation" && data.target_broadcaster === currentUser) {
-                    processDonation(data.donor_nickname, data.coin_value);
-                }
-                // (호환성) 범용 채팅 패킷 중 후원 속성
-                else if (data.action === "chat_event" && data.is_gift) {
-                    if (data.target_broadcaster && data.target_broadcaster !== currentUser) return;
-                    processDonation(data.user || data.donor_nickname, data.coin_value);
-                }
-            };
-
+        
             ws.onclose = () => {
-                statusEl.innerText = "🔴 연결 끊김 (재접속 중...)";
+                statusEl.innerText = "🔴 서버 연결 끊김 (재접속 대기)";
                 statusEl.style.color = "#ff0000";
                 setTimeout(initWebSocket, 3000);
             };
+            
+            ws.onerror = (e) => {
+                console.error("연결 에러:", e);
+            };
         }
-
-        // 실행
-        requestAnimationFrame(renderEngine);
+        // 페이지 로드 시 즉시 실행
         initWebSocket();
 
     </script>
