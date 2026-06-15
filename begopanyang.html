@@ -155,14 +155,25 @@
             if(ws) ws.close();
             
             try {
-                // [수정] 8001번 HTTP 포트가 아닌, 배고파냥 전용 웹소켓 포트인 8340으로 안전하게 매칭합니다.
+                // [수정] 보안 통신망 분리: 기본 포트를 8001로 맞추고 Ngrok 주소 존재 시 wss:// 기반의 /ws 엔드포인트로 치환
                 const urlParams = new URLSearchParams(window.location.search);
-                const wsPort = urlParams.get('port') || '8340';
-                ws = new WebSocket(`ws://127.0.0.1:${wsPort}`);
+                const ngrokWs = urlParams.get('ws');
+                const wsPort = urlParams.get('port') || '8001';
+
+                let targetWsUrl = `ws://127.0.0.1:${wsPort}/ws`;
+
+                if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
+                    let cleanNgrok = ngrokWs.replace(/\/+$/, "");
+                    let wsBase = cleanNgrok.replace("https://", "wss://").replace("http://", "ws://");
+                    if (!wsBase.startsWith("ws")) wsBase = "wss://" + wsBase;
+                    targetWsUrl = `${wsBase}/ws`;
+                }
+                
+                ws = new WebSocket(targetWsUrl);
             } catch(e) {
-            showToast("코어 서버가 켜져있는지 확인해주세요.", true);
-            return;
-        }
+                showToast("코어 서버가 켜져있는지 확인해주세요.", true);
+                return;
+            }
 
             ws.onopen = () => {
                 showToast('🟢 코어 서버 자동 연동 완료. 데이터를 불러옵니다.');
@@ -344,7 +355,7 @@
             urlObj.searchParams.set('user', currentUser);
             // [수정] 뷰어가 백엔드와 다이렉트로 통신할 수 있도록 전용 포트 정보를 함께 인계합니다.
             const urlParams = new URLSearchParams(window.location.search);
-            const wsPort = urlParams.get('port') || '8340';
+            const wsPort = urlParams.get('port') || '8001';
             urlObj.searchParams.set('port', wsPort);
             if (autoNgrokUrl) {
                 urlObj.searchParams.set('ws', autoNgrokUrl);
