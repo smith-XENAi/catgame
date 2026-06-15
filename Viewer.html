@@ -31,8 +31,18 @@
         let floatTexts = [];
         let ws = null;
 
-        const LOCAL_CAT_DB_URL = "http://localhost:8001/modules/m_begopanyang/d_catdesign/";
-        const LOCAL_FOOD_DB_URL = "http://localhost:8001/modules/m_begopanyang/d_fooddesign/";
+        // [수정] Ngrok 웹소켓 주소가 있다면 HTTPS 주소로 변환하여 에셋 로드, 없다면 로컬 할당
+        const urlParams = new URLSearchParams(window.location.search);
+        const serverPort = urlParams.get('port') || '8001';
+        const ngrokWs = urlParams.get('ws');
+
+        let baseUrl = `http://127.0.0.1:${serverPort}`;
+        if (ngrokWs) {
+            baseUrl = ngrokWs.replace("wss://", "https://").replace("ws://", "http://");
+        }
+
+        const LOCAL_CAT_DB_URL = `${baseUrl}/modules/m_begopanyang/d_catdesign/`;
+        const LOCAL_FOOD_DB_URL = `${baseUrl}/modules/m_begopanyang/d_fooddesign/`;
 
         /* =========================================================================
            2. 캔버스 및 물리 엔진 초기화
@@ -436,7 +446,15 @@
             if (ws) { ws.onclose = null; ws.close(); }
             const statusEl = document.getElementById('connection-status');
 
-            try { ws = new WebSocket("ws://127.0.0.1:8001"); } catch (e) { return; }
+            try { 
+                // [수정] Ngrok 터널 주소가 파라미터로 전달되었다면 최우선으로 적용, 없다면 로컬 포트 사용
+                const urlParams = new URLSearchParams(window.location.search);
+                const ngrokWs = urlParams.get('ws');
+                const wsPort = urlParams.get('port') || '8001';
+                
+                const targetWsUrl = ngrokWs ? ngrokWs : `ws://127.0.0.1:${wsPort}`;
+                ws = new WebSocket(targetWsUrl); 
+            } catch (e) { return; }
 
             ws.onopen = () => {
                 statusEl.innerText = "🟢 데이터 동기화 중...";
