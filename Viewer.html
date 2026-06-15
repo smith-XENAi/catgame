@@ -446,30 +446,21 @@
         ========================================================================= */
         function initWebSocket() {
             if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); }
-            const statusEl = document.getElementById('connection-status');
-
+            
             try { 
                 const urlParams = new URLSearchParams(window.location.search);
                 const ngrokWs = urlParams.get('ws');
-                const wsPort = urlParams.get('port') || '8001';
+                // [수정] 코어 로그에 명시된 8340 포트를 기본값으로 설정
+                const wsPort = urlParams.get('port') || '8340';
                 
                 let targetWsUrl = `ws://127.0.0.1:${wsPort}`;
                 
-                if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
+                if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined") {
                     targetWsUrl = ngrokWs.replace("https://", "wss://").replace("http://", "ws://");
-                    if (!targetWsUrl.startsWith("ws")) {
-                        targetWsUrl = "wss://" + targetWsUrl;
-                    }
                 }
                 
                 ws = new WebSocket(targetWsUrl); 
-
-                ws.onerror = (error) => {
-                    console.error("[웹소켓 에러 발생]", error);
-                    statusEl.innerText = "🔴 연결 에러 (서버 확인 필요)";
-                };
             } catch (e) { 
-                console.error("[웹소켓 초기화 실패]:", e);
                 setTimeout(initWebSocket, 3000);
                 return; 
             }
