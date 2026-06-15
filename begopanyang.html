@@ -179,8 +179,15 @@
             if(!ngrok) return showToast('Ngrok 주소를 입력해주세요.', true);
             
             // 프로토콜 규격 정리
+            // 프로토콜 규격 정리
             ngrok = ngrok.replace(/\/+$/, "");
-            if(!ngrok.startsWith('http')) ngrok = 'https://' + ngrok;
+            if(ngrok.startsWith('wss://')) {
+                ngrok = ngrok.replace('wss://', 'https://');
+            } else if(ngrok.startsWith('ws://')) {
+                ngrok = ngrok.replace('ws://', 'http://');
+            } else if(!ngrok.startsWith('http')) {
+                ngrok = 'https://' + ngrok;
+            }
 
             showToast('🔄 코어 통신망(Ngrok) 개통 확인 중...', false);
 
