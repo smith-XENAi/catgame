@@ -23,28 +23,19 @@
         const PIXEL_SIZE = 6;
         let currentUser = new URLSearchParams(window.location.search).get('user');
         
-        let userData = { settings: { foodMappings: [], fixedDonors: [] } };
-        let donorHistory = {}; 
-        
-        let activeCats = []; 
-        let foods = []; 
-        let floatTexts = [];
-        let ws = null;
+        let userData = { settings: null };
+        let donorHistory = {};
 
-        // [수정] Ngrok 웹소켓 주소가 있다면 HTTPS 주소로 변환하여 에셋 로드, 없다면 로컬 할당
+        // [수정] Ngrok 및 로컬 가동 상태에 따라 에셋 로딩 주소 동적 결정
         const urlParams = new URLSearchParams(window.location.search);
-        const serverPort = urlParams.get('port') || '8001';
         const ngrokWs = urlParams.get('ws');
-
-        let baseUrl = `http://127.0.0.1:${serverPort}`;
-        
-        // "null", "undefined" 문자열이 잘못 들어오는 것을 방어
-        if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined") {
-            baseUrl = ngrokWs.replace("wss://", "https://").replace("ws://", "http://");
+        let assetBaseUrl = "http://localhost:8001";
+        if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
+            assetBaseUrl = ngrokWs.replace("wss://", "https://").replace("ws://", "http://");
         }
 
-        const LOCAL_CAT_DB_URL = `${baseUrl}/modules/m_begopanyang/d_catdesign/`;
-        const LOCAL_FOOD_DB_URL = `${baseUrl}/modules/m_begopanyang/d_fooddesign/`;
+        const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/d_catdesign/`;
+        const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/d_fooddesign/`;
 
         /* =========================================================================
            2. 캔버스 및 물리 엔진 초기화
@@ -445,17 +436,27 @@
            5. 코어 백엔드 웹소켓 통신 (목업 완전 제거)
         ========================================================================= */
         function initWebSocket() {
-            if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); }
+            if (ws) { ws.onclose = null; ws.close(); }
             const statusEl = document.getElementById('connection-status');
-            
-            // 코어가 할당한 8340 포트로 접속
-            const wsPort = '8340';
-            const targetWsUrl = `ws://127.0.0.1:${wsPort}`;
-            
-            console.log("코어 통신 포트 접속 시도:", targetWsUrl);
-            
-            ws = new WebSocket(targetWsUrl); 
-        
+
+            try { 
+                // [수정] Ngrok 터널 주소(최우선) 또는 할당 포트(8340)를 동적으로 파싱하여 접속
+                const urlParams = new URLSearchParams(window.location.search);
+                const ngrokWs = urlParams.get('ws');
+                const wsPort = urlParams.get('port') || '8340';
+                
+                let targetWsUrl = `ws://127.0.0.1:${wsPort}`;
+                
+                if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
+                    targetWsUrl = ngrokWs.replace("https://", "wss://").replace("http://", "ws://");
+                    if (!targetWsUrl.startsWith("ws")) {
+                        targetWsUrl = "wss://" + targetWsUrl;
+                    }
+                }
+                
+                ws = new WebSocket(targetWsUrl); 
+            } catch (e) { return; }
+
             ws.onopen = () => {
                 statusEl.innerText = "🟢 시스템 연결 성공";
                 statusEl.style.color = "#00ff00";
