@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>배고파냥 - STREAMER CONTROLLER</title>
+    <title>배고파냥 - STREAMER DASHBOARD</title>
     <style>
         body { background: #0a0e17; color: #e0e6ed; font-family: 'Courier New', Courier, monospace; padding: 20px; line-height: 1.6; margin: 0; }
         .container { max-width: 900px; margin: 0 auto; background: #131a26; padding: 30px; border-radius: 12px; border: 3px solid #0066cc; box-shadow: 0 0 20px rgba(0, 102, 204, 0.3); }
@@ -23,12 +23,12 @@
         .btn-danger { background: #aa0033; }
         .btn-danger:hover { background: #cc0044; }
 
-        input[type="text"], input[type="number"], select { padding: 12px; background: #080c13; color: #00ffcc; border: 1px solid #004488; border-radius: 5px; font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.2s; width: 100%; box-sizing: border-box; }
-        input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: #00ccff; box-shadow: 0 0 8px rgba(0, 204, 255, 0.3); }
+        input[type="text"], input[type="password"], input[type="number"], select { padding: 12px; background: #080c13; color: #00ffcc; border: 1px solid #004488; border-radius: 5px; font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.2s; width: 100%; box-sizing: border-box; }
+        input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus, select:focus { border-color: #00ccff; box-shadow: 0 0 8px rgba(0, 204, 255, 0.3); }
 
         /* Login Area */
         #login-area { text-align: center; padding: 40px 20px; }
-        #login-area input { max-width: 350px; text-align: center; margin-bottom: 10px; display: inline-block; }
+        #login-area input { max-width: 350px; text-align: center; margin-bottom: 15px; display: inline-block; }
 
         /* Fixed Donor Area */
         .fixed-donor-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; background: #080c13; padding: 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749; align-items: center; }
@@ -54,39 +54,57 @@
     <div id="toast" class="toast"></div>
 
     <div class="container">
-        <h1>🐾 배고파냥 - STREAMER SETTING</h1>
+        <h1>🐾 배고파냥 - STREAMER DASHBOARD</h1>
         
         <!-- 1. 로그인 구역 -->
         <div id="login-area" class="section active">
-            <h3>1. 라이브 계정 및 코어 터널 연동</h3>
-            <p style="color: #8892b0; font-size: 14px;">플랫폼의 고유 아이디와 로컬 코어가 뚫어둔 Ngrok 터널 주소를 입력하세요.<br>(최초 1회 인증 시 브라우저에 안전하게 저장됩니다.)</p>
-            <input type="text" id="streamer-id" placeholder="@스트리머ID 입력 (예: @yoom1111)">
+            <h3>🔒 스트리머 계정 보안 로그인</h3>
+            <p style="color: #8892b0; font-size: 14px; margin-bottom: 25px;">
+                타인의 접근으로부터 게임 데이터를 보호하기 위해 비밀번호를 도입했습니다.<br>
+                <b style="color:#ffcc00;">최초 접속 시 입력한 비밀번호로 계정이 즉시 귀속(생성)되며</b>,<br>
+                이후부터는 해당 비밀번호를 알아야만 설정을 열람하고 수정할 수 있습니다.
+            </p>
+            <input type="text" id="streamer-id" placeholder="스트리머 ID (예: @user123)">
             <br>
-            <input type="text" id="ngrok-url" placeholder="Ngrok 주소 입력 (예: https://abcd.ngrok-free.app)">
+            <input type="password" id="streamer-pw" placeholder="계정 비밀번호 (최초 접속 시 자동 설정됨)">
             <br>
-            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px; margin-top:15px;" onclick="doLogin()">터널 통신 테스트 및 세팅 시작</button>
-
-            <!-- Ngrok Unlock Area (통신 실패 시 자동 노출) -->
-            <div id="ngrok-unlock-area" style="display: none; background: #3a1111; border: 1px solid #ff3333; padding: 15px; margin-top: 20px; border-radius: 8px;">
-                <p style="color:#ffcc00; font-size:14px; margin-top:0; font-weight:bold;">⚠️ Ngrok 무료망 통신 차단 감지</p>
-                <p style="color:#e0e6ed; font-size:13px; line-height: 1.4;">
-                    Ngrok 무료 버전의 브라우저 보안 경고창 때문에 백그라운드 웹소켓 통신이 막혔습니다.<br>
-                    아래 버튼을 눌러 새 창을 여신 뒤, <b>[Visit Site]</b> 버튼을 한 번만 클릭해 보안을 해제해주세요.<br>
-                    해제 후 이 페이지로 돌아와 다시 <b>[터널 통신 테스트]</b> 버튼을 누르시면 됩니다.
-                </p>
-                <button class="btn btn-danger" style="margin-top: 5px;" onclick="unlockNgrok()">🌐 보안창 1초만에 해제하기</button>
-            </div>
+            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px; margin-top:10px;" onclick="doLogin()">안전하게 로그인 및 세팅 시작</button>
         </div>
 
         <!-- 2. 대시보드 구역 -->
         <div id="dashboard-area" style="display:none;">
-            <div style="background: #080c13; padding: 10px 20px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #00ccff;">
-                현재 접속 계정: <b id="display-user-id" style="color:#00ffcc; font-size: 18px;"></b>
+            <div style="background: #080c13; padding: 10px 20px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #00ccff; display: flex; justify-content: space-between; align-items: center;">
+                <div>현재 접속 계정: <b id="display-user-id" style="color:#00ffcc; font-size: 18px;"></b></div>
+                <div>
+                    <button class="btn" style="padding: 5px 15px; margin-right: 5px;" onclick="togglePasswordArea()">비밀번호 수정</button>
+                    <button class="btn btn-danger" style="padding: 5px 15px;" onclick="location.reload()">로그아웃</button>
+                </div>
+            </div>
+
+            <!-- 비밀번호 변경 구역 (초기 숨김) -->
+            <div id="password-change-area" style="display:none; background: #1a2332; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #004488;">
+                <h3 style="margin-top:0; color:#00ccff;">🔑 비밀번호 수정</h3>
+                
+                <!-- Step 1: 현재 비밀번호 확인 -->
+                <div id="pw-step-1">
+                    <p style="color: #8892b0; font-size: 13px;">본인 확인을 위해 현재 비밀번호를 먼저 입력해주세요.</p>
+                    <input type="password" id="check-current-pw" placeholder="현재 비밀번호 입력" style="max-width: 250px; margin-right: 10px;">
+                    <button class="btn btn-success" onclick="verifyCurrentPassword()">수정</button>
+                    <button class="btn btn-danger" onclick="togglePasswordArea()">취소</button>
+                </div>
+                
+                <!-- Step 2: 새 비밀번호 입력 (초기 숨김) -->
+                <div id="pw-step-2" style="display:none;">
+                    <p style="color: #00ffcc; font-size: 13px;">인증되었습니다. 새롭게 사용할 비밀번호를 입력해주세요.</p>
+                    <input type="password" id="input-new-pw" placeholder="새 비밀번호 입력" style="max-width: 250px; margin-right: 10px;">
+                    <button class="btn btn-success" onclick="executePasswordChange()">변경 완료</button>
+                    <button class="btn btn-danger" onclick="togglePasswordArea()">취소</button>
+                </div>
             </div>
 
             <!-- 먹이 맵핑 -->
             <div class="section active">
-                <h3>2. 후원 먹이 코인 맵핑</h3>
+                <h3>1. 후원 먹이 코인 맵핑</h3>
                 <p style="color: #8892b0; font-size: 12px;">시청자가 후원한 코인의 범위(Min~Max)에 따라 어떤 먹이가 떨어질지 설정하세요.</p>
                 
                 <div id="mapping-container"></div>
@@ -95,7 +113,7 @@
 
             <!-- 고정 후원자 지정 -->
             <div class="section active">
-                <h3>3. 열혈 팬(VIP) 전용 고양이 고정 등록</h3>
+                <h3>2. 열혈 팬(VIP) 전용 고양이 고정 등록</h3>
                 <p style="color: #8892b0; font-size: 12px;">특정 닉네임의 후원자에게는 랜덤 고양이가 아닌, 지정된 고양이와 특별한 이름을 고정 부여합니다.</p>
                 
                 <div class="fixed-donor-row">
@@ -113,14 +131,13 @@
             </div>
 
             <!-- 저장 및 URL 발급 -->
-            <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 서버 설정 저장 및 송출용 URL 발급</button>
+            <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 서버에 설정 안전 저장 및 송출용 URL 발급</button>
 
             <div id="result-area" class="result-panel" style="display: none;">
-                <h3 style="color:#00ffcc; margin-top:0;">✅ 모든 설정이 코어에 저장되었습니다!</h3>
-                <p style="color: #8892b0; font-size: 13px;">아래 URL을 OBS 브라우저 소스에 복사하여 붙여넣으세요.</p>
+                <h3 style="color:#00ffcc; margin-top:0;">✅ 귀하의 설정이 암호화되어 서버에 저장되었습니다!</h3>
+                <p style="color: #8892b0; font-size: 13px;">아래 발급된 URL을 OBS 브라우저 소스에 복사하여 붙여넣으세요.</p>
                 <div class="url-box" id="final-url"></div>
                 <button class="btn" onclick="copyUrl()">📋 URL 복사하기</button>
-                <button class="btn btn-danger" onclick="window.open(document.getElementById('final-url').innerText, '_blank')">🚀 뷰어 새창 열기 테스트</button>
             </div>
         </div>
     </div>
@@ -131,18 +148,15 @@
         // ============================================================================
         let masterDB = { cats: {}, foods: {} };
         let currentUser = "";
+        let currentPw = "";
         let mappingCount = 0;
         let fixedDonors = [];
         let ws = null;
-        
-        let autoNgrokUrl = ""; // 백엔드에서 내려주는 자동 터널 주소 (Fallback)
-        let manualNgrokUrl = ""; // 사용자가 직접 핑(Ping) 테스트를 통과시킨 터널 주소 (Primary)
+        let autoNgrokUrl = ""; 
 
         window.onload = () => {
             const savedId = localStorage.getItem('bego_user_id');
-            const savedNgrok = localStorage.getItem('bego_ngrok_url');
             if(savedId) document.getElementById('streamer-id').value = savedId;
-            if(savedNgrok) document.getElementById('ngrok-url').value = savedNgrok;
         };
 
         function showToast(msg, isError = false) {
@@ -153,167 +167,158 @@
         }
 
         // ============================================================================
-        // 2. 로그인 및 Ping 테스트 로직
+        // 2. 로그인 인증 및 통신 로직
         // ============================================================================
-        
-        // Ngrok 수동 보안 해제창 띄우기 기능
-        function unlockNgrok() {
-            let ngrok = document.getElementById('ngrok-url').value.trim();
-            ngrok = ngrok.replace(/\/+$/, "");
-            if(ngrok.startsWith('wss://')) ngrok = ngrok.replace('wss://', 'https://');
-            else if(ngrok.startsWith('ws://')) ngrok = ngrok.replace('ws://', 'http://');
-            else if(!ngrok.startsWith('http')) ngrok = 'https://' + ngrok;
-            
-            window.open(ngrok, '_blank');
-        }
-
-        function testNgrokConnection(ngrokUrl) {
-            return new Promise((resolve, reject) => {
-                let wsBase = ngrokUrl.replace("https://", "wss://").replace("http://", "ws://");
-                if (!wsBase.startsWith("ws")) wsBase = "wss://" + wsBase;
-                
-                const probeWsUrl = `${wsBase}/ws`;
-                const tempWs = new WebSocket(probeWsUrl);
-                
-                const timeout = setTimeout(() => {
-                    tempWs.close();
-                    reject(new Error("Timeout"));
-                }, 5000); // 5초 타임아웃 핑 검증
-
-                tempWs.onopen = () => {
-                    clearTimeout(timeout);
-                    tempWs.close();
-                    resolve(true); // 통신 성공
-                };
-
-                tempWs.onerror = (e) => {
-                    clearTimeout(timeout);
-                    reject(e);
-                };
-            });
-        }
-
-        async function doLogin() {
+        function doLogin() {
             const id = document.getElementById('streamer-id').value.trim();
-            let ngrok = document.getElementById('ngrok-url').value.trim();
+            const pw = document.getElementById('streamer-pw').value.trim();
             
-            if(!id) return showToast('스트리머 ID를 입력해주세요.', true);
-            if(!ngrok) return showToast('Ngrok 주소를 입력해주세요.', true);
+            if(!id || !pw) return showToast('아이디와 비밀번호를 모두 입력해주세요.', true);
             
-            // [해결] 프로토콜 기형 중복(https://wss://) 방지 정밀 파싱
-            ngrok = ngrok.replace(/\/+$/, "");
-            if(ngrok.startsWith('wss://')) {
-                ngrok = ngrok.replace('wss://', 'https://');
-            } else if(ngrok.startsWith('ws://')) {
-                ngrok = ngrok.replace('ws://', 'http://');
-            } else if(!ngrok.startsWith('http')) {
-                ngrok = 'https://' + ngrok;
-            }
+            localStorage.setItem('bego_user_id', id);
+            currentUser = id;
+            currentPw = pw;
 
-            // 테스트 재개 시 팝업 숨김
-            document.getElementById('ngrok-unlock-area').style.display = 'none';
-            showToast('🔄 코어 통신망(Ngrok) 개통 확인 중...', false);
-
-            try {
-                // 통신망이 실제로 열려있는지 1차 핑(Ping) 테스트 수행
-                await testNgrokConnection(ngrok);
-                
-                showToast('터널 통신 성공! 데이터를 불러옵니다.');
-                
-                // 데이터 영구 저장
-                localStorage.setItem('bego_user_id', id);
-                localStorage.setItem('bego_ngrok_url', ngrok);
-                
-                currentUser = id;
-                manualNgrokUrl = ngrok; // 검증된 주소 글로벌 바인딩
-
-                document.getElementById('login-area').style.display = 'none';
-                document.getElementById('dashboard-area').style.display = 'block';
-                document.getElementById('display-user-id').innerText = currentUser;
-
-                // 본격적인 소켓 데이터 로드 파이프라인 가동
-                initWebSocket(); 
-            } catch (error) {
-                // Ngrok Interstitial(경고창) 또는 서버 꺼짐에 의한 연결 실패 처리
-                showToast('연결 실패. 아래의 보안창 해제 버튼을 확인해주세요.', true);
-                document.getElementById('ngrok-unlock-area').style.display = 'block';
-                console.error("Ping Test Failed:", error);
-            }
+            initWebSocket(); 
         }
 
         function initWebSocket() {
             if(ws) ws.close();
             
+            // 마스터가 전달해준 URL에 포함된 ws 파라미터를 통해 보안 코어에 다이렉트 통신
+            const urlParams = new URLSearchParams(window.location.search);
+            let targetWsUrl = urlParams.get('ws');
+            
+            if (!targetWsUrl) {
+                // 로컬에서 마스터가 테스트할 때를 위한 Fallback
+                const wsPort = urlParams.get('port') || '8340';
+                targetWsUrl = `ws://127.0.0.1:${wsPort}`;
+            } else {
+                targetWsUrl = targetWsUrl.replace("https://", "wss://").replace("http://", "ws://");
+                if (!targetWsUrl.startsWith("ws")) targetWsUrl = "wss://" + targetWsUrl;
+            }
+
             try {
-                // Ping 테스트를 통과한 manualNgrokUrl을 메인 소켓 주소로 안전하게 치환
-                let wsBase = manualNgrokUrl.replace("https://", "wss://").replace("http://", "ws://");
-                if (!wsBase.startsWith("ws")) wsBase = "wss://" + wsBase;
-                
-                const targetWsUrl = `${wsBase}/ws`;
                 ws = new WebSocket(targetWsUrl);
             } catch(e) {
-                showToast("웹소켓 주소 바인딩에 실패했습니다.", true);
+                showToast("마스터 서버와의 통신에 실패했습니다. 링크를 확인하세요.", true);
                 return;
             }
 
             ws.onopen = () => {
-                ws.send(JSON.stringify({ action: "load_db", payload: {} }));
+                showToast('🟢 서버 연결 성공. 인증을 진행합니다...', false);
+                // 비밀번호가 포함된 인증 패킷 발송
+                ws.send(JSON.stringify({ 
+                    action: "login", 
+                    payload: { streamer_id: currentUser, password: currentPw } 
+                }));
             };
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 
-                if (data.action === "load_db_res") {
-                    const db = data.data;
-                    
-                    // 백엔드가 감지한 주소가 있다면 백업용으로 기록
-                    autoNgrokUrl = db.ngrok_url || "";
+                // 로그인 인증 결과 처리
+                if (data.action === "login_res") {
+                    if (data.status === "success") {
+                        if (data.is_new) showToast('환영합니다! 신규 계정과 비밀번호가 귀속되었습니다.');
+                        else showToast('로그인 성공! 설정 데이터를 안전하게 불러왔습니다.');
 
-                    if(db.master_assets) {
-                        masterDB = db.master_assets;
+                        document.getElementById('login-area').style.display = 'none';
+                        document.getElementById('dashboard-area').style.display = 'block';
+                        document.getElementById('display-user-id').innerText = currentUser;
+
+                        autoNgrokUrl = data.data.ngrok_url || "";
+                        masterDB = data.data.master_assets;
                         initSelectors();
-                    }
 
-                    if(db.user_data && db.user_data[currentUser]) {
-                        const userSettings = db.user_data[currentUser].settings || {};
+                        const userSettings = data.data.user_settings || {};
                         
                         document.getElementById('mapping-container').innerHTML = ''; 
                         if(userSettings.foodMappings && userSettings.foodMappings.length > 0) {
                             userSettings.foodMappings.forEach(m => addMappingRow(m));
                         } else {
-                            addMappingRow();
+                            const foodKeys = Object.keys(masterDB.foods);
+                            if (foodKeys.length > 0) foodKeys.forEach(key => addMappingRow({ foodId: key, minCoin: '', maxCoin: '' }));
+                            else addMappingRow();
                         }
 
                         if(userSettings.fixedDonors) {
                             fixedDonors = userSettings.fixedDonors;
                             renderFixedDonors();
                         }
-                        showToast('기존 세팅 데이터를 성공적으로 불러왔습니다!');
                     } else {
-                        document.getElementById('mapping-container').innerHTML = '';
-                        // 신규 유저일 경우 마스터 DB에 있는 기본 먹이들을 초기 슬롯으로 쫙 깔아줌
-                        const foodKeys = Object.keys(masterDB.foods);
-                        if (foodKeys.length > 0) {
-                            foodKeys.forEach(key => addMappingRow({ foodId: key, minCoin: '', maxCoin: '' }));
-                        } else {
-                            addMappingRow();
-                        }
-                        showToast('신규 유저입니다. 기본 먹이 슬롯이 자동 배치되었습니다.');
+                        // 비밀번호 불일치 등 인증 실패
+                        showToast(data.msg, true);
                     }
                 }
 
                 if (data.action === "save_user_data_res") {
-                    showToast('설정이 코어 서버에 안전하게 저장되었습니다!');
+                    if(data.status === "success") showToast('설정이 서버에 안전하게 저장되었습니다!');
+                    else showToast('저장 실패: ' + data.msg, true);
+                }
+
+                if (data.action === "change_password_res") {
+                    if(data.status === "success") {
+                        currentPw = document.getElementById('input-new-pw').value.trim();
+                        togglePasswordArea();
+                        showToast('비밀번호가 성공적으로 변경되었습니다!');
+                    } else {
+                        showToast('비밀번호 변경 실패: ' + data.msg, true);
+                    }
                 }
             };
 
             ws.onclose = () => {
-                showToast('🔴 코어 서버와 연결이 끊어졌습니다.', true);
+                showToast('🔴 통신 서버와 연결이 끊어졌습니다.', true);
             };
         }
 
         // ============================================================================
-        // 3. UI 렌더링 및 제어 (변경 없음)
+        // 2-1. 비밀번호 변경 로직
+        // ============================================================================
+        function togglePasswordArea() {
+            const area = document.getElementById('password-change-area');
+            if(area.style.display === 'none') {
+                area.style.display = 'block';
+                document.getElementById('pw-step-1').style.display = 'block';
+                document.getElementById('pw-step-2').style.display = 'none';
+                document.getElementById('check-current-pw').value = '';
+                document.getElementById('input-new-pw').value = '';
+            } else {
+                area.style.display = 'none';
+            }
+        }
+
+        function verifyCurrentPassword() {
+            const enteredPw = document.getElementById('check-current-pw').value.trim();
+            if(!enteredPw) return showToast('현재 비밀번호를 입력해주세요.', true);
+            
+            if(enteredPw === currentPw) {
+                document.getElementById('pw-step-1').style.display = 'none';
+                document.getElementById('pw-step-2').style.display = 'block';
+                showToast('비밀번호가 확인되었습니다. 새 비밀번호를 입력하세요.');
+            } else {
+                showToast('현재 비밀번호가 일치하지 않습니다.', true);
+            }
+        }
+
+        function executePasswordChange() {
+            const newPw = document.getElementById('input-new-pw').value.trim();
+            if(!newPw) return showToast('새 비밀번호를 입력해주세요.', true);
+            if(newPw === currentPw) return showToast('기존 비밀번호와 동일합니다.', true);
+
+            if(ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ 
+                    action: "change_password", 
+                    payload: { streamer_id: currentUser, old_password: currentPw, new_password: newPw } 
+                }));
+            } else {
+                showToast('서버와 연결되어 있지 않습니다.', true);
+            }
+        }
+
+        // ============================================================================
+        // 3. UI 렌더링 및 제어 (동일)
         // ============================================================================
         function initSelectors() {
             const catSelect = document.getElementById('vip-cat-select');
@@ -394,7 +399,7 @@
         }
 
         // ============================================================================
-        // 4. 저장 및 자동 URL 발급 (수동 주소 우선 적용)
+        // 4. 저장 및 깃허브 Viewer URL 발급 (비밀번호 포함 보안 통신)
         // ============================================================================
         function saveAndGenerate() {
             const mappings = [];
@@ -413,6 +418,7 @@
 
             const payload = {
                 streamer_id: currentUser,
+                password: currentPw, // 보안 저장을 위해 암호 재전송
                 settings: {
                     foodMappings: mappings,
                     fixedDonors: fixedDonors
@@ -425,21 +431,20 @@
                 return showToast('코어 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
             }
 
-            const urlObj = new URL(window.location.href);
-            let path = urlObj.pathname;
-            path = path.substring(0, path.lastIndexOf('/') + 1); 
-            urlObj.pathname = path + 'Viewer.html';              
+            // [발급 핵심] 깃허브에 올라간 순수 렌더링용 Viewer.html 주소
+            const githubViewerBase = "https://smith-xenai.github.io/catgame/Viewer.html";
+            const urlObj = new URL(githubViewerBase);
             
             urlObj.searchParams.set('user', currentUser);
             
-            const urlParams = new URLSearchParams(window.location.search);
-            const wsPort = urlParams.get('port') || '8001';
-            urlObj.searchParams.set('port', wsPort);
-            
-            // [검증 완료] 사용자가 직접 입력하고 핑을 통과시킨 주소를 최우선적으로 뷰어에 인계
-            const finalNgrok = manualNgrokUrl || autoNgrokUrl;
-            if (finalNgrok) {
-                urlObj.searchParams.set('ws', finalNgrok);
+            // 로컬 8340에서 수신한 Ngrok 터널 주소를 뷰어 파라미터로 암호화 삽입
+            if (autoNgrokUrl) {
+                urlObj.searchParams.set('ws', autoNgrokUrl);
+            } else {
+                // 테스트용 로컬 Fallback
+                const urlParams = new URLSearchParams(window.location.search);
+                const wsPort = urlParams.get('port') || '8340';
+                urlObj.searchParams.set('port', wsPort);
             }
 
             document.getElementById('final-url').innerText = urlObj.toString();
@@ -449,7 +454,7 @@
 
         function copyUrl() {
             navigator.clipboard.writeText(document.getElementById('final-url').innerText);
-            showToast('URL이 복사되었습니다.');
+            showToast('OBS용 URL이 복사되었습니다.');
         }
     </script>
 </body>
