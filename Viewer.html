@@ -446,24 +446,38 @@
         ========================================================================= */
         function initWebSocket() {
             if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); }
+            const statusEl = document.getElementById('connection-status');
             
             try { 
                 const urlParams = new URLSearchParams(window.location.search);
                 const ngrokWs = urlParams.get('ws');
-                // [수정] 코어 로그에 명시된 8340 포트를 기본값으로 설정
                 const wsPort = urlParams.get('port') || '8340';
                 
                 let targetWsUrl = `ws://127.0.0.1:${wsPort}`;
                 
                 if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined") {
+                    // Ngrok 터널 사용 시 wss 프로토콜로 자동 변환
                     targetWsUrl = ngrokWs.replace("https://", "wss://").replace("http://", "ws://");
                 }
                 
+                console.log("연결 시도 대상:", targetWsUrl);
                 ws = new WebSocket(targetWsUrl); 
+        
+                ws.onopen = () => {
+                    statusEl.innerText = "🟢 서버 연결 성공";
+                    statusEl.style.color = "#00ff00";
+                };
+        
+                ws.onerror = (e) => {
+                    statusEl.innerText = "🟡 연결 중... (서버 재시작 대기)";
+                };
+                
             } catch (e) { 
+                console.error("웹소켓 초기화 오류:", e);
                 setTimeout(initWebSocket, 3000);
                 return; 
             }
+        }
             
             ws.onopen = () => {
                 statusEl.innerText = "🟢 데이터 동기화 중...";
