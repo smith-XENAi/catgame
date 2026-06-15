@@ -37,7 +37,9 @@
         const ngrokWs = urlParams.get('ws');
 
         let baseUrl = `http://127.0.0.1:${serverPort}`;
-        if (ngrokWs) {
+        
+        // "null", "undefined" 문자열이 잘못 들어오는 것을 방어
+        if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined") {
             baseUrl = ngrokWs.replace("wss://", "https://").replace("ws://", "http://");
         }
 
@@ -447,14 +449,24 @@
             const statusEl = document.getElementById('connection-status');
 
             try { 
-                // [수정] Ngrok 터널 주소가 파라미터로 전달되었다면 최우선으로 적용, 없다면 로컬 포트 사용
+                // [수정] 파라미터 유효성 검증 및 안전한 프로토콜(wss) 강제 변환 방어 로직 추가
                 const urlParams = new URLSearchParams(window.location.search);
                 const ngrokWs = urlParams.get('ws');
                 const wsPort = urlParams.get('port') || '8001';
                 
-                const targetWsUrl = ngrokWs ? ngrokWs : `ws://127.0.0.1:${wsPort}`;
+                let targetWsUrl = `ws://127.0.0.1:${wsPort}`;
+                if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined") {
+                    targetWsUrl = ngrokWs.replace("https://", "wss://").replace("http://", "ws://");
+                }
+                
                 ws = new WebSocket(targetWsUrl); 
-            } catch (e) { return; }
+            } catch (e) { 
+                console.error("웹소켓 초기화 실패:", e);
+                statusEl.innerText = "🔴 연결 에러 (재시도 중...)";
+                // 에러가 나도 코드가 멈추지 않고 재접속 루프가 돌도록 방어
+                setTimeout(initWebSocket, 3000);
+                return; 
+            }
 
             ws.onopen = () => {
                 statusEl.innerText = "🟢 데이터 동기화 중...";
