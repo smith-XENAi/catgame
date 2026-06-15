@@ -65,6 +65,17 @@
             <input type="text" id="ngrok-url" placeholder="Ngrok 주소 입력 (예: https://abcd.ngrok-free.app)">
             <br>
             <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px; margin-top:15px;" onclick="doLogin()">터널 통신 테스트 및 세팅 시작</button>
+
+            <!-- Ngrok Unlock Area (통신 실패 시 자동 노출) -->
+            <div id="ngrok-unlock-area" style="display: none; background: #3a1111; border: 1px solid #ff3333; padding: 15px; margin-top: 20px; border-radius: 8px;">
+                <p style="color:#ffcc00; font-size:14px; margin-top:0; font-weight:bold;">⚠️ Ngrok 무료망 통신 차단 감지</p>
+                <p style="color:#e0e6ed; font-size:13px; line-height: 1.4;">
+                    Ngrok 무료 버전의 브라우저 보안 경고창 때문에 백그라운드 웹소켓 통신이 막혔습니다.<br>
+                    아래 버튼을 눌러 새 창을 여신 뒤, <b>[Visit Site]</b> 버튼을 한 번만 클릭해 보안을 해제해주세요.<br>
+                    해제 후 이 페이지로 돌아와 다시 <b>[터널 통신 테스트]</b> 버튼을 누르시면 됩니다.
+                </p>
+                <button class="btn btn-danger" style="margin-top: 5px;" onclick="unlockNgrok()">🌐 보안창 1초만에 해제하기</button>
+            </div>
         </div>
 
         <!-- 2. 대시보드 구역 -->
@@ -144,7 +155,18 @@
         // ============================================================================
         // 2. 로그인 및 Ping 테스트 로직
         // ============================================================================
-        // [신규] Ngrok HTTP 브라우저 경고창(Interstitial)을 우회하기 위해 웹소켓 프로브(Probe)로 핑을 뚫습니다.
+        
+        // Ngrok 수동 보안 해제창 띄우기 기능
+        function unlockNgrok() {
+            let ngrok = document.getElementById('ngrok-url').value.trim();
+            ngrok = ngrok.replace(/\/+$/, "");
+            if(ngrok.startsWith('wss://')) ngrok = ngrok.replace('wss://', 'https://');
+            else if(ngrok.startsWith('ws://')) ngrok = ngrok.replace('ws://', 'http://');
+            else if(!ngrok.startsWith('http')) ngrok = 'https://' + ngrok;
+            
+            window.open(ngrok, '_blank');
+        }
+
         function testNgrokConnection(ngrokUrl) {
             return new Promise((resolve, reject) => {
                 let wsBase = ngrokUrl.replace("https://", "wss://").replace("http://", "ws://");
@@ -178,7 +200,7 @@
             if(!id) return showToast('스트리머 ID를 입력해주세요.', true);
             if(!ngrok) return showToast('Ngrok 주소를 입력해주세요.', true);
             
-            // 프로토콜 규격 정리
+            // [해결] 프로토콜 기형 중복(https://wss://) 방지 정밀 파싱
             ngrok = ngrok.replace(/\/+$/, "");
             if(ngrok.startsWith('wss://')) {
                 ngrok = ngrok.replace('wss://', 'https://');
@@ -188,6 +210,8 @@
                 ngrok = 'https://' + ngrok;
             }
 
+            // 테스트 재개 시 팝업 숨김
+            document.getElementById('ngrok-unlock-area').style.display = 'none';
             showToast('🔄 코어 통신망(Ngrok) 개통 확인 중...', false);
 
             try {
@@ -210,7 +234,9 @@
                 // 본격적인 소켓 데이터 로드 파이프라인 가동
                 initWebSocket(); 
             } catch (error) {
-                showToast('Ngrok 연결 실패: 로컬 코어가 켜져있는지 확인하세요.', true);
+                // Ngrok Interstitial(경고창) 또는 서버 꺼짐에 의한 연결 실패 처리
+                showToast('연결 실패. 아래의 보안창 해제 버튼을 확인해주세요.', true);
+                document.getElementById('ngrok-unlock-area').style.display = 'block';
                 console.error("Ping Test Failed:", error);
             }
         }
