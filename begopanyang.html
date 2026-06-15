@@ -179,7 +179,6 @@
             if(!ngrok) return showToast('Ngrok 주소를 입력해주세요.', true);
             
             // 프로토콜 규격 정리
-            // 프로토콜 규격 정리
             ngrok = ngrok.replace(/\/+$/, "");
             if(ngrok.startsWith('wss://')) {
                 ngrok = ngrok.replace('wss://', 'https://');
