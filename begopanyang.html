@@ -212,10 +212,11 @@
         function getAssetBaseUrl() {
             if (autoNgrokUrl && autoNgrokUrl !== "null" && autoNgrokUrl.trim() !== "") {
                 let cleanNgrok = autoNgrokUrl.replace(/\/+$/, "");
-                // Ngrok WSS 주소를 HTTPS로 변환하여 외부망 깃허브에서 이미지 로드 허용
+                // Ngrok WSS 주소를 HTTPS로 변환하여 깃허브 외부망 연결 호환
                 return cleanNgrok.replace("wss://", "https://").replace("ws://", "http://");
             }
-            return "http://127.0.0.1:8001";
+            // 방화벽 및 이미지 에셋 서버는 8001이 아닌 8340에서 구동됨
+            return "http://127.0.0.1:8340";
         }
 
         // ============================================================================
@@ -372,18 +373,20 @@
                 let imgUrl = '';
                 
                 if(type === 'cat') {
-                    if(!item.filename.includes('_idle')) return; // 요구사항: _idle 포함
+                    if(!item.filename.includes('_idle')) return;
                     const parsed = parseCatFilename(item.filename);
                     parsedName = parsed.name;
                     isPaid = parsed.isPaid;
                     statStr = '스킨 액션 적용';
+                    // 경로에 /modules/m_begopanyang/image/ 추가
                     imgUrl = `${getAssetBaseUrl()}/modules/m_begopanyang/image/d_catdesign/${item.folder}/${item.filename}`;
                 } else {
-                    if(!item.filename.includes('_m')) return; // 요구사항: _m 포함
+                    if(!item.filename.includes('_m')) return;
                     const parsed = parseFoodFilename(item.filename);
                     parsedName = parsed.name;
                     isPaid = parsed.isPaid;
                     statStr = `경험치 부여: +${parsed.exp}`;
+                    // 경로에 /modules/m_begopanyang/image/ 추가
                     imgUrl = `${getAssetBaseUrl()}/modules/m_begopanyang/image/d_fooddesign/${item.folder}/${item.filename}`;
                 }
 
