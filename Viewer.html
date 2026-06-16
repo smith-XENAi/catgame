@@ -112,7 +112,7 @@
             exit() { this.state = 'EXIT'; }
 
             update() {
-                let fps = 16;
+                let fps = 30;
                 // [수정] 1초(60fps)에 해당 스텟만큼 픽셀을 전진/섭취하도록 프레임당 속도를 정교하게 치환합니다.
                 this.speedPerFrame = (this.stateData.speed / fps) + (Math.random() * 0.02 - 0.01);
                 this.eatPerFrame = (this.stateData.eating / fps) + (Math.random() * 0.02 - 0.01);
