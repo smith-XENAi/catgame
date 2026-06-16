@@ -212,15 +212,17 @@
             }
 
             draw() {
+                // 마스터 DB 구조 기반 파일 경로 유추
                 const catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
                 let targetAnim = null;
                 
                 if (catObj && catObj.filename) {
+                    // 현재 고양이 상태에 따른 태그 결정
                     const stateTag = this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' ? 'move' : 
                                      this.state === 'EATING' ? 'eat' : 
                                      this.state === 'SLEEPING' ? 'sleep' : 'idle';
                     
-                    // 파일명 규칙: 블루_idle_s.gif 등 -> idle을 변환하여 정밀 매핑
+                    // 핵심 수정: 'idle' 텍스트만 상태값으로 정밀 치환 (예: 치즈_idle_s.gif -> 치즈_move_s.gif)
                     const newFileName = catObj.filename.replace('idle', stateTag);
                     targetAnim = `${LOCAL_CAT_DB_URL}${catObj.folder}/${newFileName}`;
                 }
@@ -381,10 +383,17 @@
                 let eat = 10 + Math.floor(Math.random() * 40); remaining -= eat;
                 let hp = 10 + (remaining * 2); 
 
-                const availableCats = Object.keys(masterDB.cats || {});
-                let defaultCat = availableCats.length > 0 ? availableCats[0] : null;
+                // 마스터 DB에 등록된 전체 에셋 중 'idle'을 포함하는 고양이만 색출하여 동적 랜덤 풀 생성
+                let availableCats = [];
+                if (masterDB.cats) {
+                    availableCats = Object.keys(masterDB.cats).filter(k => masterDB.cats[k].filename && masterDB.cats[k].filename.includes('idle'));
+                }
+                
+                // 풀에서 무작위 고양이 1마리 ID 추출
+                let randomCatId = availableCats.length > 0 ? availableCats[Math.floor(Math.random() * availableCats.length)] : null;
 
-                let catId = fixed ? fixed.catId : defaultCat; 
+                // 고정 고양이가 없으면 마스터 DB 기반 랜덤 고양이 배정
+                let catId = fixed ? fixed.catId : randomCatId; 
                 let customName = fixed ? fixed.customName : donorName;
 
                 donorHistory[donorName] = { 
