@@ -15,9 +15,6 @@
     <canvas id="gameCanvas"></canvas>
 
     <script>
-        /* =========================================================================
-           1. 글로벌 상태 및 로컬 서버 DB 구조
-        ========================================================================= */
         const PIXEL_SIZE = 6;
         let currentUser = new URLSearchParams(window.location.search).get('user');
         
@@ -28,7 +25,6 @@
         let foods = [];
         let floatTexts = [];
 
-        // Ngrok 터널 경로 파싱 (이미지 에셋 포트 8340 일치화)
         const urlParams = new URLSearchParams(window.location.search);
         const ngrokWs = urlParams.get('ws');
         let assetBaseUrl = "http://127.0.0.1:8340";
@@ -41,9 +37,6 @@
         const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_catdesign/`;
         const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_fooddesign/`;
 
-        /* =========================================================================
-           2. 캔버스 및 물리 엔진 초기화
-        ========================================================================= */
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -54,26 +47,22 @@
             const newW = window.innerWidth; 
             const newH = window.innerHeight; 
             
-            if (activeCats && activeCats.length > 0) {
+            if (activeCats.length > 0) {
                 const wRatio = oldW ? (newW / oldW) : 1;
                 activeCats.forEach(c => { c.x *= wRatio; c.y = newH - 100; });
             }
-            if (foods && foods.length > 0) {
+            if (foods.length > 0) {
                 const wRatio = oldW ? (newW / oldW) : 1;
                 foods.forEach(f => { f.x *= wRatio; if (f.isGrounded) f.y = newH - 100; });
             }
 
             canvas.width = newW; 
             canvas.height = newH; 
-            oldW = newW;
-            oldH = newH;
+            oldW = newW; oldH = newH;
         }
         window.addEventListener('resize', resize);
         resize();
 
-        /* =========================================================================
-           3. 랭킹 시스템 및 인게임 오브젝트 렌더링 로직
-        ========================================================================= */
         class Cat {
             constructor(donorData, rank) {
                 this.donorName = donorData.nickname;
@@ -81,8 +70,8 @@
                 this.totalCoin = donorData.totalCoin;
                 this.rank = rank;
                 this.catId = donorData.catId;
-                
                 this.stateData = donorData.stats; 
+                
                 this.x = window.innerWidth + 100;
                 this.y = canvas.height - 100;
                 this.state = 'ENTER'; 
@@ -100,7 +89,6 @@
                 this.domElement.style.imageRendering = 'pixelated'; 
                 this.domElement.style.display = 'none';
                 
-                // 이미지 로드 실패 시 숨김 처리 방어 로직
                 this.domElement.onerror = () => { this.domElement.style.opacity = '0'; };
                 this.domElement.onload = () => { this.domElement.style.opacity = '1'; };
                 
@@ -204,8 +192,6 @@
                         this.stateData.exp += eatAmt;
                         this.stateData.hp -= 1 / 60; 
 
-                        this.targetFood.w = Math.max(0, (this.targetFood.pt / this.targetFood.maxPt) * 100);
-
                         const reqExp = 100 + ((this.stateData.level - 1) * 200);
                         if (this.stateData.exp >= reqExp) {
                             this.stateData.level++;
@@ -218,6 +204,7 @@
                                 else this.stateData.maxHp += 1;
                             }
                             this.stateData.hp = this.stateData.maxHp; 
+
                             floatTexts.push({ text: "✨LEVEL UP!✨", x: this.x, y: this.y - 80, life: 100, color: '#00ffcc' });
                         }
                     }
@@ -225,7 +212,6 @@
             }
 
             draw() {
-                // 마스터 DB에서 실제 고양이 데이터 파싱 (복구됨)
                 const catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
                 let targetAnim = null;
                 
@@ -234,7 +220,7 @@
                                      this.state === 'EATING' ? 'eat' : 
                                      this.state === 'SLEEPING' ? 'sleep' : 'idle';
                     
-                    // idle 텍스트를 현재 상태(move, eat, sleep)로 치환하여 애니메이션 연결 완벽 복구
+                    // 파일명 규칙: 블루_idle_s.gif 등 -> idle을 변환하여 정밀 매핑
                     const newFileName = catObj.filename.replace('idle', stateTag);
                     targetAnim = `${LOCAL_CAT_DB_URL}${catObj.folder}/${newFileName}`;
                 }
@@ -253,29 +239,25 @@
                     this.domElement.style.display = 'none';
                 }
 
-                // ==========================================
-                // 100x50 UI 박스 규격화 렌더링
-                // ==========================================
+                // 100x50 UI Box
                 const boxW = 100;
                 const boxH = 50;
                 const startX = this.x - (boxW / 2);
                 const textY = this.y - 85; 
                 
-                // 박스 배경
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
                 ctx.fillRect(startX, textY - 15, boxW, boxH);
                 ctx.strokeStyle = 'rgba(0, 204, 255, 0.5)';
                 ctx.lineWidth = 1;
                 ctx.strokeRect(startX, textY - 15, boxW, boxH);
 
-                // 1행: 아바타 + 닉네임 (6글자)
                 if (this.avatarImg) ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
+                
                 let shortName = this.donorName.substring(0, 6);
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 11px "Courier New"';
                 ctx.fillText(shortName, startX + 25, textY + 2);
 
-                // 2행: 레벨 및 게이지
                 const barY = textY + 15;
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = 'bold 10px "Courier New"';
@@ -284,7 +266,6 @@
                 const barStartX = startX + 35;
                 const barWidth = 60;
                 
-                // EXP Bar
                 const reqExp = 100 + ((this.stateData.level - 1) * 200);
                 const expWidth = Math.min(barWidth, (this.stateData.exp / reqExp) * barWidth);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
@@ -292,7 +273,6 @@
                 ctx.fillStyle = '#00ffcc'; 
                 ctx.fillRect(barStartX, barY - 2, expWidth, 4);
 
-                // HP Bar
                 const hpWidth = Math.max(0, (this.stateData.hp / this.stateData.maxHp) * barWidth);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
                 ctx.fillRect(barStartX, barY + 5, barWidth, 4);
@@ -312,15 +292,12 @@
             if(!foodObj || !foodObj.filename) return;
 
             const imgUrl = `${LOCAL_FOOD_DB_URL}${foodObj.folder}/${foodObj.filename}`;
-            
-            // 먹이 마스터가 부여한 고유 경험치(base_pt)를 최우선 적용 (복구됨)
-            const expAmount = foodObj.base_pt || 10; 
 
             for(let i=0; i<quantity; i++) {
                 let fData = {
                     mapId: mappingData.foodId,
-                    pt: expAmount,
-                    maxPt: expAmount,
+                    pt: Number(foodObj.base_pt) || 10,
+                    maxPt: Number(foodObj.base_pt) || 10,
                     x: Math.random() * (canvas.width - 100) + 50,
                     y: -100 - (i * 20), 
                     w: 100, 
@@ -333,10 +310,11 @@
                 fData.domElement.style.pointerEvents = 'none';
                 fData.domElement.style.zIndex = '40';
                 fData.domElement.style.imageRendering = 'pixelated';
-                fData.domElement.style.objectFit = 'cover';
-                fData.domElement.style.objectPosition = 'left top';
+                fData.domElement.style.objectFit = 'contain';
+                fData.domElement.style.objectPosition = 'center bottom';
                 
                 fData.domElement.onerror = () => { fData.domElement.style.display = 'none'; };
+
                 document.body.appendChild(fData.domElement);
                 foods.push(fData);
             }
@@ -359,10 +337,14 @@
                 const drawX = f.x - 50;
                 const drawY = f.y - 50;
                 
+                // 먹이의 경험치 비율에 맞춰 이미지를 자연스럽게 축소
+                const ratio = Math.max(0.2, f.pt / f.maxPt);
+                const size = 100 * ratio;
+
                 f.domElement.style.left = drawX + 'px';
-                f.domElement.style.top = drawY + 'px';
-                f.domElement.style.width = f.w + 'px';
-                f.domElement.style.height = '100px';
+                f.domElement.style.top = (drawY + (100 - size)) + 'px';
+                f.domElement.style.width = size + 'px';
+                f.domElement.style.height = size + 'px';
 
                 if (f.pt <= 0 || f.w <= 0) {
                     if (f.domElement && f.domElement.parentNode) f.domElement.remove();
@@ -381,18 +363,15 @@
                 ft.life--;
                 if (ft.life <= 0) floatTexts.splice(i, 1);
             }
+
             requestAnimationFrame(renderEngine);
         }
 
         /* =========================================================================
-           4. 후원 처리 및 밀어내기 랭킹 시스템 로직 (랜덤 배정 복구)
+           4. 후원 처리 및 랭킹 시스템
         ========================================================================= */
-        function processDonation(donationData) {
-            if (!userData.settings || !userData.settings.foodMappings) return;
-
-            const donorName = donationData.donor_nickname || 'Unknown';
-            const coin = donationData.coin_value || 0;
-            const thumbUrl = donationData.thumb || null; 
+        function processDonation(donorName, coin, thumbUrl) {
+            if (!userData.settings || !userData.settings.foodMappings) return; 
 
             if (!donorHistory[donorName]) {
                 const fixed = (userData.settings.fixedDonors || []).find(d => d.nickname === donorName);
@@ -402,11 +381,10 @@
                 let eat = 10 + Math.floor(Math.random() * 40); remaining -= eat;
                 let hp = 10 + (remaining * 2); 
 
-                // 하드코딩 완전 제거! 마스터 DB에 있는 실제 고양이 중에서만 랜덤 배정
                 const availableCats = Object.keys(masterDB.cats || {});
-                let randomCatId = availableCats.length > 0 ? availableCats[Math.floor(Math.random() * availableCats.length)] : null;
+                let defaultCat = availableCats.length > 0 ? availableCats[0] : null;
 
-                let catId = fixed ? fixed.catId : randomCatId; 
+                let catId = fixed ? fixed.catId : defaultCat; 
                 let customName = fixed ? fixed.customName : donorName;
 
                 donorHistory[donorName] = { 
@@ -426,6 +404,7 @@
                     break;
                 }
             }
+
             updateRankings();
         }
 
@@ -438,17 +417,22 @@
                 const rank = index + 1;
                 const existingCat = activeCats.find(c => c.donorName === donor.nickname && c.state !== 'EXIT');
                 
-                if (existingCat) existingCat.updateData(donor.totalCoin, rank);
-                else activeCats.push(new Cat(donor, rank)); 
+                if (existingCat) {
+                    existingCat.updateData(donor.totalCoin, rank);
+                } else {
+                    activeCats.push(new Cat(donor, rank)); 
+                }
             });
 
             activeCats.forEach(cat => {
-                if (!top3Nicknames.includes(cat.donorName) && cat.state !== 'EXIT') cat.exit(); 
+                if (!top3Nicknames.includes(cat.donorName) && cat.state !== 'EXIT') {
+                    cat.exit(); 
+                }
             });
         }
 
         /* =========================================================================
-           5. 코어 백엔드 웹소켓 통신 
+           5. 코어 백엔드 웹소켓 통신
         ========================================================================= */
         let ws = null;
         function initWebSocket() {
@@ -472,7 +456,11 @@
             ws.onopen = () => {
                 statusEl.innerText = "🟢 시스템 연결 성공";
                 statusEl.style.color = "#00ff00";
-                ws.send(JSON.stringify({ action: "viewer_init", payload: { streamer_id: currentUser } }));
+                
+                ws.send(JSON.stringify({ 
+                    action: "viewer_init", 
+                    payload: { streamer_id: currentUser } 
+                }));
             };
         
             ws.onmessage = (event) => {
@@ -490,8 +478,10 @@
                     if (Object.keys(donorHistory).length > 0) updateRankings();
                 }
 
-                if (data.action === "live_donation" && userData.settings) {
-                    processDonation(data);
+                if (data.action === "live_donation") {
+                    if (userData.settings) {
+                        processDonation(data.donor_nickname, data.coin_value, data.thumb);
+                    }
                 }
             };
 
@@ -504,7 +494,6 @@
         
         initWebSocket();
         requestAnimationFrame(renderEngine);
-
     </script>
 </body>
 </html>
