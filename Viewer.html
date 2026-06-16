@@ -107,8 +107,9 @@
             exit() { this.state = 'EXIT'; }
 
             update() {
-                this.speedPerFrame = this.stateData.speed / 60;
-                this.eatPerFrame = this.stateData.eating / 60;
+                // [수정] 속도 단위를 60에서 10으로 변경하여 6배 상향. 정상적인 이동 속도를 보장합니다.
+                this.speedPerFrame = this.stateData.speed / 10;
+                this.eatPerFrame = this.stateData.eating / 10;
 
                 if (this.state === 'ENTER') {
                     this.x -= Math.max(3, this.speedPerFrame * 2);
@@ -161,7 +162,7 @@
                     } else {
                         this.direction = dist > 0 ? 1 : -1;
                         this.x += Math.sign(dist) * this.speedPerFrame;
-                        this.stateData.hp -= 1 / 60; 
+                        this.stateData.hp -= 5 / 60; // [수정] 정상적인 이동 체력 소모량
                     }
                 }
 
@@ -176,7 +177,7 @@
                         } else {
                             this.direction = dist > 0 ? 1 : -1;
                             this.x += Math.sign(dist) * this.speedPerFrame;
-                            this.stateData.hp -= 1 / 60; 
+                            this.stateData.hp -= 5 / 60; // [수정] 정상적인 이동 체력 소모량
                         }
                     }
                 }
@@ -190,7 +191,9 @@
                         this.targetFood.pt -= eatAmt;
                         this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + eatAmt);
                         this.stateData.exp += eatAmt;
-                        this.stateData.hp -= 1 / 60; 
+                        this.stateData.hp -= 5 / 60; // [수정] 먹는 중에도 자연 체력 소모 유지
+
+                        this.targetFood.w = Math.max(0, (this.targetFood.pt / this.targetFood.maxPt) * 100);
 
                         const reqExp = 100 + ((this.stateData.level - 1) * 200);
                         if (this.stateData.exp >= reqExp) {
@@ -339,14 +342,12 @@
                 const drawX = f.x - 50;
                 const drawY = f.y - 50;
                 
-                // 먹이의 경험치 비율에 맞춰 이미지를 자연스럽게 축소
-                const ratio = Math.max(0.2, f.pt / f.maxPt);
-                const size = 100 * ratio;
-
                 f.domElement.style.left = drawX + 'px';
-                f.domElement.style.top = (drawY + (100 - size)) + 'px';
-                f.domElement.style.width = size + 'px';
-                f.domElement.style.height = size + 'px';
+                f.domElement.style.top = drawY + 'px';
+                // [수정] 이미지 비율이 찌그러지지 않도록 크기를 고정하고, 클리핑 마스크(clip-path)를 적용해 먹는 연출 복구
+                f.domElement.style.width = '100px';
+                f.domElement.style.height = '100px';
+                f.domElement.style.clipPath = `inset(0 ${100 - f.w}% 0 0)`;
 
                 if (f.pt <= 0 || f.w <= 0) {
                     if (f.domElement && f.domElement.parentNode) f.domElement.remove();
@@ -383,10 +384,19 @@
                 let eat = 10 + Math.floor(Math.random() * 40); remaining -= eat;
                 let hp = 10 + (remaining * 2); 
 
-                // 마스터 DB에 등록된 전체 에셋 중 'idle'을 포함하는 고양이만 색출하여 동적 랜덤 풀 생성
+                // [수정] 마스터 DB 기준 'idle' 포함 유무 및 유료 아이템 잠금 해제 여부 대조
                 let availableCats = [];
                 if (masterDB.cats) {
-                    availableCats = Object.keys(masterDB.cats).filter(k => masterDB.cats[k].filename && masterDB.cats[k].filename.includes('idle'));
+                    availableCats = Object.keys(masterDB.cats).filter(k => {
+                        let cat = masterDB.cats[k];
+                        if (!cat.filename || !cat.filename.includes('idle')) return false;
+                        
+                        let isPaid = cat.filename.includes('_s');
+                        if (!isPaid) return true; // 무료 아이템은 모두 통과
+                        
+                        let unlocked = userData.settings.unlocked && userData.settings.unlocked.cats ? userData.settings.unlocked.cats : [];
+                        return unlocked.includes(cat.id); // 유료는 해금된 경우만 포함
+                    });
                 }
                 
                 // 풀에서 무작위 고양이 1마리 ID 추출
@@ -476,20 +486,20 @@
                 const data = JSON.parse(event.data);
                 
                 if (data.action === "viewer_init_res") {
-                    userData.settings = data.data.user_settings;
+                    userData.settings = data.data.user_settings || { foodMappings: [], fixedDonors: [] };
                     masterDB = data.data.master_assets || { cats: {}, foods: {} };
-                    
-                    if (!userData.settings || Object.keys(userData.settings).length === 0) {
-                        userData.settings = { foodMappings: [], fixedDonors: [] };
-                    }
-                    
                     donorHistory = data.data.donor_history || {};
+                    
                     if (Object.keys(donorHistory).length > 0) updateRankings();
                 }
 
                 if (data.action === "live_donation") {
+                    // [수정] 내 방송 채널(아이디)로 들어온 후원만 처리하도록 필터링
+                    if (data.target_broadcaster && data.target_broadcaster !== currentUser) {
+                        return; 
+                    }
                     if (userData.settings) {
-                        processDonation(data.donor_nickname, data.coin_value, data.thumb);
+                        processDonation(data); // 통째로 넘겨 thumb 처리
                     }
                 }
             };
