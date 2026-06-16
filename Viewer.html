@@ -214,11 +214,11 @@
                 }
             }
 
+           // [이렇게 교체해 주십시오]
             draw() {
                 // 마스터 DB 구조 기반 파일 경로 유추
                 let catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
                 
-                // [오류 방어] 무효한 ID(예: 'cat1')가 기록되어 있다면, 현재 유효한 랜덤 고양이로 강제 교체하여 등장시킵니다.
                 if (!catObj && masterDB.cats) {
                     let fallbackCats = Object.keys(masterDB.cats).filter(k => masterDB.cats[k] && masterDB.cats[k].filename && masterDB.cats[k].filename.includes('idle'));
                     if (fallbackCats.length > 0) {
@@ -231,10 +231,7 @@
                 let targetAnim = null;
                 
                 if (catObj && catObj.filename) {
-                    // 현재 고양이 상태에 따른 태그 결정
-                    const stateTag = this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' ? 'move' : 
-                                     this.state === 'EATING' ? 'eat' : 
-                                     this.state === 'SLEEPING' ? 'sleep' : 'idle';
+                    const baseName = catObj.filename.replace('_idle', ''); // 블루_idle_s.gif -> 블루_s.gif 로직은 실제 DB 구축 방식에 따라 다름. 여기선 단순 교체
                     
                     // 핵심 수정: 'idle' 텍스트만 상태값으로 정밀 치환 (예: 치즈_idle_s.gif -> 치즈_move_s.gif)
                     const newFileName = catObj.filename.replace('idle', stateTag);
