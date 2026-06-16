@@ -33,21 +33,15 @@
         // Ngrok 외부 접속 경로 파싱
         const urlParams = new URLSearchParams(window.location.search);
         const ngrokWs = urlParams.get('ws');
-        
-        // 이미지 에셋 서버 포트 명시 (8340)
-        let assetBaseUrl = "http://127.0.0.1:8340"; 
+        let assetBaseUrl = "http://127.0.0.1:8340";
         
         if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
             let cleanNgrok = ngrokWs.replace(/\/+$/, "");
             assetBaseUrl = cleanNgrok.replace("wss://", "https://").replace("ws://", "http://");
         }
 
-        // 경로에 /modules/m_begopanyang/image/ 추가하여 정적 라우터와 완벽 일치시킴
         const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_catdesign/`;
         const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_fooddesign/`;
-
-        // 기본 3종 랜덤 풀 (하드코딩 - 마스터DB ID 기준)
-        const DEFAULT_CATS = ['cat1', 'cat2', 'cat3']; 
 
         /* =========================================================================
            2. 캔버스 및 물리 엔진 초기화
@@ -83,12 +77,14 @@
         resize();
 
         /* =========================================================================
-           3. 랭킹 시스템 및 인게임 오브젝트 복구
+           3. 랭킹 시스템 및 인게임 오브젝트 렌더링 로직
         ========================================================================= */
         class Cat {
             constructor(donorData, rank) {
                 this.donorName = donorData.nickname;
-                this.donorThumb = donorData.thumb || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNDQ0Ii8+PC9zdmc+'; // 기본 아바타
+                // 기본 썸네일 방어 코드
+                this.donorThumb = donorData.thumb || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNDQ0Ii8+PC9zdmc+';
+                
                 this.totalCoin = donorData.totalCoin;
                 this.rank = rank;
                 this.catId = donorData.catId;
@@ -111,10 +107,14 @@
                 this.domElement.style.zIndex = '50';
                 this.domElement.style.imageRendering = 'pixelated'; 
                 this.domElement.style.display = 'none';
+                
+                this.domElement.onerror = () => { this.domElement.style.opacity = '0'; };
+                this.domElement.onload = () => { this.domElement.style.opacity = '1'; };
+                
                 document.body.appendChild(this.domElement);
                 this.currentAnimSrc = null;
 
-                // 아바타 이미지 객체
+                // 아바타 렌더링용 객체 생성
                 this.avatarImg = new Image();
                 this.avatarImg.src = this.donorThumb;
             }
@@ -238,12 +238,11 @@
             }
 
             draw() {
-                // 마스터 DB 구조 기반 파일 경로 유추
+                // 마스터 DB 구조 기반 파일 경로 동적 파싱
                 const catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
                 let targetAnim = null;
                 
                 if (catObj && catObj.filename) {
-                    const baseName = catObj.filename.replace('_idle', ''); 
                     const stateTag = this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' ? 'move' : 
                                      this.state === 'EATING' ? 'eat' : 
                                      this.state === 'SLEEPING' ? 'sleep' : 'idle';
@@ -262,24 +261,26 @@
                     this.domElement.style.top = (this.y + (PIXEL_SIZE * 8)) + 'px';
                     this.domElement.style.width = '90px'; 
                     this.domElement.style.transform = `translate(-50%, -100%) scaleX(${this.direction})`;
+                } else {
+                    this.domElement.style.display = 'none';
                 }
 
                 // ==========================================
-                // 요구사항: 가로 100px, 세로 50px UI 박스 그리기
+                // 100x50 규격화된 UI 박스 렌더링
                 // ==========================================
                 const boxW = 100;
                 const boxH = 50;
                 const startX = this.x - (boxW / 2);
                 const textY = this.y - 85; 
                 
-                // 반투명 배경 박스
+                // 반투명 배경
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
                 ctx.fillRect(startX, textY - 15, boxW, boxH);
                 ctx.strokeStyle = 'rgba(0, 204, 255, 0.5)';
                 ctx.lineWidth = 1;
                 ctx.strokeRect(startX, textY - 15, boxW, boxH);
 
-                // 1행: 아바타 이미지 + 닉네임 (6글자)
+                // 1행: 아바타 + 닉네임 (6글자 제한)
                 if (this.avatarImg) {
                     ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
                 }
@@ -289,7 +290,7 @@
                 ctx.font = 'bold 11px "Courier New"';
                 ctx.fillText(shortName, startX + 25, textY + 2);
 
-                // 2행: 레벨, 게이지
+                // 2행: 레벨 및 게이지 바
                 const barY = textY + 15;
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = 'bold 10px "Courier New"';
@@ -346,8 +347,10 @@
                 fData.domElement.style.imageRendering = 'pixelated';
                 fData.domElement.style.objectFit = 'cover';
                 fData.domElement.style.objectPosition = 'left top';
-                document.body.appendChild(fData.domElement);
+                
+                fData.domElement.onerror = () => { fData.domElement.style.display = 'none'; };
 
+                document.body.appendChild(fData.domElement);
                 foods.push(fData);
             }
         }
@@ -399,11 +402,11 @@
            4. 후원 처리 및 밀어내기 랭킹 시스템 로직
         ========================================================================= */
         function processDonation(donationData) {
-            const donorName = donationData.nickname || 'Unknown';
-            const coin = donationData.coin_value || 0;
-            const thumbUrl = donationData.thumb || null; // 유튜브 프로필 사진
-
             if (!userData.settings || !userData.settings.foodMappings) return;
+
+            const donorName = donationData.donor_nickname || 'Unknown';
+            const coin = donationData.coin_value || 0;
+            const thumbUrl = donationData.thumb || null; // 패킷에서 썸네일 수신
 
             if (!donorHistory[donorName]) {
                 const fixed = (userData.settings.fixedDonors || []).find(d => d.nickname === donorName);
@@ -413,8 +416,10 @@
                 let eat = 10 + Math.floor(Math.random() * 40); remaining -= eat;
                 let hp = 10 + (remaining * 2); 
 
-                // 고정 고양이가 없으면 기본 3종 중 랜덤 배정
-                let catId = fixed ? fixed.catId : DEFAULT_CATS[Math.floor(Math.random() * DEFAULT_CATS.length)]; 
+                const availableCats = Object.keys(masterDB.cats || {});
+                let defaultCat = availableCats.length > 0 ? availableCats[0] : null;
+
+                let catId = fixed ? fixed.catId : defaultCat; 
                 let customName = fixed ? fixed.customName : donorName;
 
                 donorHistory[donorName] = { 
@@ -471,13 +476,16 @@
             const statusEl = document.getElementById('connection-status');
 
             try { 
-                // 통신용 포트 8340 적용
                 let targetWsUrl = `ws://127.0.0.1:8340`;
                 if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
                     let cleanNgrok = ngrokWs.replace(/\/+$/, "");
                     targetWsUrl = cleanNgrok.replace("https://", "wss://").replace("http://", "ws://");
                     if (!targetWsUrl.startsWith("ws")) targetWsUrl = "wss://" + targetWsUrl;
+                } else {
+                    const wsPort = urlParams.get('port') || '8340';
+                    targetWsUrl = `ws://127.0.0.1:${wsPort}`;
                 }
+                
                 ws = new WebSocket(targetWsUrl); 
             } catch (e) { return; }
 
@@ -495,16 +503,21 @@
                 const data = JSON.parse(event.data);
                 
                 if (data.action === "viewer_init_res") {
-                    userData.settings = data.data.user_settings || { foodMappings: [], fixedDonors: [] };
+                    userData.settings = data.data.user_settings;
                     masterDB = data.data.master_assets || { cats: {}, foods: {} };
-                    donorHistory = data.data.donor_history || {};
                     
+                    if (!userData.settings || Object.keys(userData.settings).length === 0) {
+                        userData.settings = { foodMappings: [], fixedDonors: [] };
+                    }
+                    
+                    donorHistory = data.data.donor_history || {};
                     if (Object.keys(donorHistory).length > 0) updateRankings();
                 }
 
                 if (data.action === "live_donation") {
                     if (userData.settings) {
-                        processDonation(data); // 통째로 넘겨 thumb 처리
+                        // 패킷 전체를 객체로 던져서 아바타 URL(thumb)까지 추출하게끔 수정완료
+                        processDonation(data);
                     }
                 }
             };
