@@ -8,17 +8,19 @@
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
         canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; position: relative; z-index: 60; pointer-events: none; }
-        /* [수정] 텍스트 대신 점 모양으로 표시하기 위한 스타일링 */
+        /* [수정] 텍스트 대신 점 모양으로 표시하기 위한 스타일링 및 상태별 컬러 클래스 추가 */
         #connection-status { 
             position: absolute; top: 15px; right: 15px; z-index: 100;
             width: 12px; height: 12px; border-radius: 50%;
             background: #ffaa00; box-shadow: 0 0 10px #ffaa00;
             transition: background 0.3s, box-shadow 0.3s;
         }
+        #connection-status.connected { background: #00ff00; box-shadow: 0 0 10px #00ff00; }
+        #connection-status.disconnected { background: #ff0000; box-shadow: 0 0 10px #ff0000; }
     </style>
 </head>
 <body>
-    <div id="connection-status" title="서버 연결 상태"></div>
+    <div id="connection-status" title="서버 연결 대기중..."></div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
@@ -284,16 +286,31 @@
 
                 if (this.avatarImg) ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
                 
-                let shortName = this.donorName.substring(0, 6);
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 11px "Courier New"';
-                ctx.fillText(shortName, startX + 25, textY + 2);
-
                 const barY = textY + 15;
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = 'bold 10px "Courier New"';
                 ctx.fillText(`LV${this.stateData.level}`, startX + 5, barY + 5);
                 
+                ctx.restore();
+
+                // [수정] 닉네임 렌더링: 100px 제한 말줄임, 검은글씨, 노란색 outgrow 적용
+                ctx.save();
+                ctx.font = 'bold 11px "Courier New"';
+                let displayName = this.donorName;
+                if (ctx.measureText(displayName).width > 100) {
+                    while (displayName.length > 0 && ctx.measureText(displayName + '...').width > 100) {
+                        displayName = displayName.slice(0, -1);
+                    }
+                    displayName += '...';
+                }
+                
+                ctx.strokeStyle = '#ffff00'; // 노란색 외곽선 (outgrow)
+                ctx.lineWidth = 3;
+                ctx.lineJoin = 'round';
+                ctx.strokeText(displayName, startX + 25, textY + 2);
+                
+                ctx.fillStyle = '#000000'; // 검정글씨
+                ctx.fillText(displayName, startX + 25, textY + 2);
                 ctx.restore();
 
                 const barStartX = startX + 35;
@@ -303,7 +320,8 @@
                 const expWidth = Math.min(barWidth, (this.stateData.exp / reqExp) * barWidth);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; 
                 ctx.fillRect(barStartX, barY - 2, barWidth, 4);
-                ctx.fillStyle = '#00ffcc'; 
+                // [수정] 경험치 게이지를 파란색으로 변경
+                ctx.fillStyle = '#3388ff'; 
                 ctx.fillRect(barStartX, barY - 2, expWidth, 4);
 
                 const hpWidth = Math.max(0, (this.stateData.hp / this.stateData.maxHp) * barWidth);
@@ -502,9 +520,9 @@
             if (ws) { ws.onclose = null; ws.close(); }
             const statusEl = document.getElementById('connection-status');
             
-            // 연결 시도 중 - 노란색(Yellow) 점
-            statusEl.style.background = "#ffaa00";
-            statusEl.style.boxShadow = "0 0 10px #ffaa00";
+            // [수정] 연결 시도 중 - 노란색(Yellow) 점 (클래스 초기화)
+            statusEl.className = '';
+            statusEl.title = "서버 연결 시도 중...";
 
             try { 
                 let targetWsUrl = `ws://127.0.0.1:8340`;
@@ -521,9 +539,9 @@
             } catch (e) { return; }
 
             ws.onopen = () => {
-                // 연결 성공 - 녹색(Green) 점
-                statusEl.style.background = "#00ff00";
-                statusEl.style.boxShadow = "0 0 10px #00ff00";
+                // [수정] 연결 성공 - 녹색(Green) 점 (connected 클래스 부여)
+                statusEl.className = 'connected';
+                statusEl.title = "서버 연결 성공";
                 
                 ws.send(JSON.stringify({ 
                     action: "viewer_init", 
@@ -556,9 +574,9 @@
             };
 
             ws.onclose = () => {
-                // 서버 연결 끊김 - 빨간색(Red) 점
-                statusEl.style.background = "#ff0000";
-                statusEl.style.boxShadow = "0 0 10px #ff0000";
+                // [수정] 서버 연결 끊김 - 빨간색(Red) 점 (disconnected 클래스 부여)
+                statusEl.className = 'disconnected';
+                statusEl.title = "서버 연결 끊김";
                 setTimeout(initWebSocket, 3000);
             };
         }
