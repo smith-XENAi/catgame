@@ -72,7 +72,6 @@
                 this.catId = donorData.catId;
                 this.stateData = donorData.stats; 
                 
-                // [수정] 순위에 따라 스폰 위치를 120픽셀씩 분산시키고 미세 난수를 더해, 초기에 완전히 겹쳐서 스폰되는 것을 방지합니다.
                 this.x = window.innerWidth + 100 + (rank * 120) + (Math.random() * 80);
                 this.y = canvas.height - 100;
                 this.state = 'ENTER'; 
@@ -97,6 +96,11 @@
                 this.currentAnimSrc = null;
 
                 this.avatarImg = new Image();
+                // [수정] 원격 이미지가 깨졌을 경우 즉시 기본 아이콘으로 덮어씌워 에러를 방어합니다.
+                this.avatarImg.onerror = () => {
+                    this.avatarImg.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNDQ0Ii8+PC9zdmc+';
+                    this.avatarImg.onerror = null;
+                };
                 this.avatarImg.src = this.donorThumb;
             }
 
@@ -108,9 +112,10 @@
             exit() { this.state = 'EXIT'; }
 
             update() {
-                // [수정] 스텟이 완전히 동일한 고양이들이 영원히 겹쳐서 뭉쳐다니는 현상을 물리적으로 막기 위해 프레임당 속도에 극미세 난수(Jitter)를 부여합니다.
-                this.speedPerFrame = (this.stateData.speed / 10) + (Math.random() * 0.1 - 0.05);
-                this.eatPerFrame = (this.stateData.eating / 10) + (Math.random() * 0.1 - 0.05);
+                let fps = 60;
+                // [수정] 1초(60fps)에 해당 스텟만큼 픽셀을 전진/섭취하도록 프레임당 속도를 정교하게 치환합니다.
+                this.speedPerFrame = (this.stateData.speed / fps) + (Math.random() * 0.02 - 0.01);
+                this.eatPerFrame = (this.stateData.eating / fps) + (Math.random() * 0.02 - 0.01);
 
                 if (this.state === 'ENTER') {
                     this.x -= Math.max(3, this.speedPerFrame * 2);
@@ -131,7 +136,7 @@
                 if (this.stateData.hp <= 0) this.state = 'SLEEPING';
                 
                 if (this.state === 'SLEEPING') {
-                    this.stateData.hp += (this.stateData.maxHp * 0.03) / 60; 
+                    this.stateData.hp += (this.stateData.maxHp * 0.03) / fps; 
                     if (this.stateData.hp >= this.stateData.maxHp * 0.3) this.state = 'IDLE'; 
                     return; 
                 }
@@ -147,7 +152,7 @@
                 }
 
                 if (this.state === 'IDLE') {
-                    this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + (this.stateData.maxHp * 0.02) / 60);
+                    this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + (this.stateData.maxHp * 0.02) / fps);
                     this.wanderTimer--;
                     if (this.wanderTimer <= 0) {
                         this.wanderX = Math.random() * (canvas.width - 100) + 50;
@@ -158,12 +163,13 @@
 
                 if (this.state === 'WANDER') {
                     const dist = this.wanderX - this.x;
-                    if (Math.abs(dist) < 5) {
+                    if (Math.abs(dist) < this.speedPerFrame) {
                         this.state = 'IDLE';
                     } else {
                         this.direction = dist > 0 ? 1 : -1;
                         this.x += Math.sign(dist) * this.speedPerFrame;
-                        this.stateData.hp -= 5 / 60; 
+                        // [수정] 이동(WANDER) 시 1초에 스텟(speed) 수치만큼 체력을 1:1로 소모합니다.
+                        this.stateData.hp -= this.stateData.speed / fps; 
                     }
                 }
 
@@ -173,12 +179,13 @@
                         this.targetFood = null;
                     } else {
                         const dist = this.targetFood.x - this.x;
-                        if (Math.abs(dist) < 5) {
+                        if (Math.abs(dist) < this.speedPerFrame) {
                             this.state = 'EATING';
                         } else {
                             this.direction = dist > 0 ? 1 : -1;
                             this.x += Math.sign(dist) * this.speedPerFrame;
-                            this.stateData.hp -= 5 / 60; 
+                            // [수정] 먹이로 뛸 때(MOVE) 1초에 스텟(speed) 수치만큼 체력을 1:1로 소모합니다.
+                            this.stateData.hp -= this.stateData.speed / fps; 
                         }
                     }
                 }
@@ -187,14 +194,17 @@
                     if (this.targetFood.pt <= 0) {
                         this.state = 'IDLE';
                         this.targetFood = null;
-                        // [수정] 먹이를 다 먹었을 때 획득한 경험치와 체력 변동사항을 DB에 영구 저장합니다.
                         saveHistoryToServer();
                     } else {
                         let eatAmt = Math.min(this.eatPerFrame, this.targetFood.pt);
                         this.targetFood.pt -= eatAmt;
+                        
+                        // 섭취한 먹이의 영양분만큼 체력 및 경험치 회복
                         this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + eatAmt);
                         this.stateData.exp += eatAmt;
-                        this.stateData.hp -= 5 / 60; 
+                        
+                        // [수정] 먹방 활동(EATING) 중에도 1초에 먹방력 스텟(eating) 수치만큼 체력을 1:1로 소모합니다.
+                        this.stateData.hp -= this.stateData.eating / fps; 
 
                         this.targetFood.w = Math.max(0, (this.targetFood.pt / this.targetFood.maxPt) * 100);
 
@@ -203,7 +213,6 @@
                             this.stateData.level++;
                             this.stateData.exp -= reqExp;
                             
-                            // 무작위 스텟 배분
                             for(let i=0; i<20; i++) {
                                 let r = Math.floor(Math.random() * 3);
                                 if(r === 0) this.stateData.speed += 1;
@@ -213,7 +222,6 @@
                             this.stateData.hp = this.stateData.maxHp; 
 
                             floatTexts.push({ text: "✨LEVEL UP!✨", x: this.x, y: this.y - 80, life: 100, color: '#00ffcc' });
-                            // [수정] 레벨업 시 무작위로 분배된 신규 스텟과 레벨을 DB에 즉각 전송하여 저장합니다.
                             saveHistoryToServer();
                         }
                     }
@@ -221,7 +229,6 @@
             }
 
             draw() {
-                // 마스터 DB 구조 기반 파일 경로 유추
                 let catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
                 
                 if (!catObj && masterDB.cats) {
@@ -258,17 +265,17 @@
                     this.domElement.style.display = 'none';
                 }
 
-                // 100x50 UI Box
+                // 100x50 UI 좌표 계산
                 const boxW = 100;
-                const boxH = 50;
                 const startX = this.x - (boxW / 2);
                 const textY = this.y - 85; 
                 
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                ctx.fillRect(startX, textY - 15, boxW, boxH);
-                ctx.strokeStyle = 'rgba(0, 204, 255, 0.5)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(startX, textY - 15, boxW, boxH);
+                // [수정] 이름표 뒤 반투명 검은 판(배경)을 삭제하고 텍스트에 그림자를 주어 가독성을 확보합니다.
+                ctx.save();
+                ctx.shadowColor = "rgba(0,0,0,0.9)";
+                ctx.shadowBlur = 3;
+                ctx.shadowOffsetX = 1;
+                ctx.shadowOffsetY = 1;
 
                 if (this.avatarImg) ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
                 
@@ -281,27 +288,34 @@
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = 'bold 10px "Courier New"';
                 ctx.fillText(`LV${this.stateData.level}`, startX + 5, barY + 5);
+                
+                // 바(Bar)에는 섀도우가 과하게 들어가지 않도록 해제
+                ctx.restore();
 
                 const barStartX = startX + 35;
                 const barWidth = 60;
                 
                 const reqExp = 100 + ((this.stateData.level - 1) * 200);
                 const expWidth = Math.min(barWidth, (this.stateData.exp / reqExp) * barWidth);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; // 배경이 없어졌으므로 게이지 바탕 투명도를 약간 높임
                 ctx.fillRect(barStartX, barY - 2, barWidth, 4);
                 ctx.fillStyle = '#00ffcc'; 
                 ctx.fillRect(barStartX, barY - 2, expWidth, 4);
 
                 const hpWidth = Math.max(0, (this.stateData.hp / this.stateData.maxHp) * barWidth);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
                 ctx.fillRect(barStartX, barY + 5, barWidth, 4);
                 ctx.fillStyle = '#ff0055'; 
                 ctx.fillRect(barStartX, barY + 5, hpWidth, 4);
 
                 if (this.state === 'SLEEPING') {
+                    ctx.save();
+                    ctx.shadowColor = "rgba(0,0,0,0.8)";
+                    ctx.shadowBlur = 2;
                     ctx.fillStyle = '#aaaaff';
                     ctx.font = 'bold 14px "Courier New"';
                     ctx.fillText('Zzz..', this.x - 15, textY - 20);
+                    ctx.restore();
                 }
             }
         }
@@ -383,10 +397,6 @@
             requestAnimationFrame(renderEngine);
         }
 
-        /* =========================================================================
-           4. 후원 처리 및 랭킹 시스템
-        ========================================================================= */
-        // [신설] 메모리 상의 코인, 레벨, 스텟 변동을 즉각 코어 DB에 영구 기록하는 핵심 함수입니다.
         function saveHistoryToServer() {
             if (ws && ws.readyState === WebSocket.OPEN && currentUser) {
                 ws.send(JSON.stringify({ 
@@ -403,7 +413,8 @@
         function processDonation(donationData) {
             const donorName = donationData.nickname || 'Unknown';
             const coin = donationData.coin_value || 0;
-            const thumbUrl = donationData.thumb || null;
+            // [수정] 선물 썸네일 속성에 아바타 이미지가 덮어씌워진 경우를 대비해 프로필 원본 이미지가 될 확률이 높은 키워드들을 우선 검사합니다.
+            const thumbUrl = donationData.profile_img || donationData.user_thumb || donationData.avatar || donationData.thumb || null;
 
             if (!userData.settings || !userData.settings.foodMappings) return; 
 
@@ -427,7 +438,6 @@
                 }
                 let randomCatId = availableCats.length > 0 ? availableCats[Math.floor(Math.random() * availableCats.length)] : null;
                 
-                // 고정 고양이가 없으면 마스터 DB 기반 랜덤 고양이 배정
                 let catId = fixed ? fixed.catId : randomCatId; 
                 let customName = fixed ? fixed.customName : donorName;
 
@@ -459,8 +469,6 @@
             }
 
             updateRankings();
-            
-            // [수정] 후원 시 즉각 서버 DB에 코인 변동 및 신규유저 등장(디자인 각인) 내역을 기록합니다.
             saveHistoryToServer();
         }
         
@@ -487,9 +495,6 @@
             });
         }
 
-        /* =========================================================================
-           5. 코어 백엔드 웹소켓 통신
-        ========================================================================= */
         let ws = null;
         function initWebSocket() {
             if (ws) { ws.onclose = null; ws.close(); }
