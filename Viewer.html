@@ -229,8 +229,8 @@
                 let targetAnim = null;
                 
                 if (catObj && catObj.filename) {
-                    // [오류 수정] 렌더링 중단을 막기 위해 삭제되었던 상태 태그 연산 로직을 다시 복구했습니다.
-                    const stateTag = this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' ? 'move' : 
+                    // [오류 수정] 먹이로 뛰어갈 때 상태인 'MOVE'를 추가하여 정상적으로 _move 애니메이션이 나오도록 복구했습니다.
+                    const stateTag = (this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' || this.state === 'MOVE') ? 'move' : 
                                      this.state === 'EATING' ? 'eat' : 
                                      this.state === 'SLEEPING' ? 'sleep' : 'idle';
                     
@@ -380,7 +380,6 @@
         /* =========================================================================
            4. 후원 처리 및 랭킹 시스템
         ========================================================================= */
-        // [오류 수정] 파라미터를 객체 형태로 단일화하여 데이터 증발 오류를 잡았습니다.
         function processDonation(donationData) {
             const donorName = donationData.nickname || 'Unknown';
             const coin = donationData.coin_value || 0;
