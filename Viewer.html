@@ -2,16 +2,23 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>배고파냥 - 라이브 송출 뷰어</title>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
         canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; position: relative; z-index: 60; pointer-events: none; }
-        #connection-status { position: absolute; top: 15px; right: 15px; font-size: 14px; color: #00ff00; z-index: 100; text-shadow: 1px 1px 0 #000; font-weight: bold; }
+        /* [수정] 텍스트 대신 점 모양으로 표시하기 위한 스타일링 */
+        #connection-status { 
+            position: absolute; top: 15px; right: 15px; z-index: 100;
+            width: 12px; height: 12px; border-radius: 50%;
+            background: #ffaa00; box-shadow: 0 0 10px #ffaa00;
+            transition: background 0.3s, box-shadow 0.3s;
+        }
     </style>
 </head>
 <body>
-    <div id="connection-status">🔴 서버 연결 대기중...</div>
+    <div id="connection-status" title="서버 연결 상태"></div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
@@ -111,12 +118,10 @@
             exit() { this.state = 'EXIT'; }
 
             update() {
-                // [수정] 스테이지 100포인트 분할 및 스텟 기반 이동/체력 1:1 물리엔진
-                let fps = 30; 
-                let stageUnit = canvas.width / 100; // 스테이지를 100포인트로 나눈 1포인트당 픽셀 값
+                let fps = 60; 
+                let stageUnit = canvas.width / 100; 
                 
-                // fps 30기준 2초(60프레임)에 스텟만큼 이동 = 프레임당 (스텟 / 60) 포인트 이동
-                let pointSpeedPerFrame = (this.stateData.speed / 180) + (Math.random() * 0.02 - 0.01);
+                let pointSpeedPerFrame = (this.stateData.speed / 60) + (Math.random() * 0.02 - 0.01);
                 let pointEatPerFrame = (this.stateData.eating / 60) + (Math.random() * 0.02 - 0.01);
 
                 this.speedPerFrame = pointSpeedPerFrame * stageUnit; 
@@ -141,8 +146,7 @@
                 if (this.stateData.hp <= 0) this.state = 'SLEEPING';
                 
                 if (this.state === 'SLEEPING') {
-                    // [수정] 잠을 잘 때 체력이 서서히 충전되며, 100%가 되어야만 깹니다.
-                    this.stateData.hp += this.stateData.maxHp / (fps * 10); // 약 10초에 걸쳐 풀충전
+                    this.stateData.hp += this.stateData.maxHp / (fps * 10); 
                     if (this.stateData.hp >= this.stateData.maxHp) {
                         this.stateData.hp = this.stateData.maxHp;
                         this.state = 'IDLE'; 
@@ -177,7 +181,6 @@
                     } else {
                         this.direction = dist > 0 ? 1 : -1;
                         this.x += Math.sign(dist) * this.speedPerFrame;
-                        // [수정] 이동한 포인트 수치만큼 체력을 1:1로 소모합니다.
                         this.stateData.hp -= pointSpeedPerFrame; 
                     }
                 }
@@ -193,7 +196,6 @@
                         } else {
                             this.direction = dist > 0 ? 1 : -1;
                             this.x += Math.sign(dist) * this.speedPerFrame;
-                            // [수정] 먹이로 뛸 때 이동한 포인트 수치만큼 체력을 1:1로 소모합니다.
                             this.stateData.hp -= pointSpeedPerFrame; 
                         }
                     }
@@ -208,7 +210,6 @@
                         let eatAmt = Math.min(this.eatPerFrame, this.targetFood.pt);
                         this.targetFood.pt -= eatAmt;
                         
-                        // [수정] 먹이를 먹을 때 먹이 포인트(eatAmt)만큼 정확히 체력을 회복합니다.
                         this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + eatAmt);
                         this.stateData.exp += eatAmt;
 
@@ -310,8 +311,6 @@
                 ctx.fillRect(barStartX, barY + 5, barWidth, 4);
                 ctx.fillStyle = '#ff0055'; 
                 ctx.fillRect(barStartX, barY + 5, hpWidth, 4);
-
-                // [수정] 수면 시 스텟게이지 위의 Zzz.. 텍스트 표출 로직을 완전히 삭제했습니다.
             }
         }
 
@@ -409,7 +408,6 @@
             const donorName = donationData.nickname || 'Unknown';
             const coin = donationData.coin_value || 0;
             
-            // [수정] 선물 썸네일 속성에 아바타 이미지가 덮어씌워지는 것을 막기 위해, 경로 내에 gift, obj 등의 단어가 있으면 원천 무시합니다.
             let safeThumb = donationData.profile_img || donationData.user_avatar || donationData.avatar_url || donationData.avatar || null;
             if (!safeThumb && donationData.thumb) {
                 const tLow = donationData.thumb.toLowerCase();
@@ -451,7 +449,6 @@
                     stats: { name: customName, level: 1, exp: 0, speed: spd, eating: eat, maxHp: hp, hp: hp } 
                 };
             } else if (safeThumb && !donorHistory[donorName].thumb) {
-                // 기존 유저인데 유효한 썸네일이 새롭게 감지되었다면 보완 등록
                 donorHistory[donorName].thumb = safeThumb;
             }
             
@@ -504,6 +501,10 @@
         function initWebSocket() {
             if (ws) { ws.onclose = null; ws.close(); }
             const statusEl = document.getElementById('connection-status');
+            
+            // 연결 시도 중 - 노란색(Yellow) 점
+            statusEl.style.background = "#ffaa00";
+            statusEl.style.boxShadow = "0 0 10px #ffaa00";
 
             try { 
                 let targetWsUrl = `ws://127.0.0.1:8340`;
@@ -520,8 +521,9 @@
             } catch (e) { return; }
 
             ws.onopen = () => {
-                statusEl.innerText = "🟢 시스템 연결 성공";
-                statusEl.style.color = "#00ff00";
+                // 연결 성공 - 녹색(Green) 점
+                statusEl.style.background = "#00ff00";
+                statusEl.style.boxShadow = "0 0 10px #00ff00";
                 
                 ws.send(JSON.stringify({ 
                     action: "viewer_init", 
@@ -554,8 +556,9 @@
             };
 
             ws.onclose = () => {
-                statusEl.innerText = "🔴 서버 연결 끊김 (재접속 대기)";
-                statusEl.style.color = "#ff0000";
+                // 서버 연결 끊김 - 빨간색(Red) 점
+                statusEl.style.background = "#ff0000";
+                statusEl.style.boxShadow = "0 0 10px #ff0000";
                 setTimeout(initWebSocket, 3000);
             };
         }
