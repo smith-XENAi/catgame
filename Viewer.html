@@ -34,15 +34,15 @@
         const urlParams = new URLSearchParams(window.location.search);
         const ngrokWs = urlParams.get('ws');
         
-        // [수정됨] 마스터 지시에 따라 기본 포트를 8001로 변경
-        let assetBaseUrl = "http://127.0.0.1:8001"; 
+        // 이미지 에셋 서버 포트 명시 (8340)
+        let assetBaseUrl = "http://127.0.0.1:8340"; 
         
         if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
             let cleanNgrok = ngrokWs.replace(/\/+$/, "");
             assetBaseUrl = cleanNgrok.replace("wss://", "https://").replace("ws://", "http://");
         }
 
-        // [수정됨] 마스터 지시에 따라 모듈 내부의 이미지 경로로 재설정
+        // 경로에 /modules/m_begopanyang/image/ 추가하여 정적 라우터와 완벽 일치시킴
         const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_catdesign/`;
         const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_fooddesign/`;
 
