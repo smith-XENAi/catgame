@@ -1,461 +1,326 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>배고파냥 - STREAMER DASHBOARD</title>
-    <style>
-        body { background: #0a0e17; color: #e0e6ed; font-family: 'Courier New', Courier, monospace; padding: 20px; line-height: 1.6; margin: 0; }
-        .container { max-width: 900px; margin: 0 auto; background: #131a26; padding: 30px; border-radius: 12px; border: 3px solid #0066cc; box-shadow: 0 0 20px rgba(0, 102, 204, 0.3); }
+# -*- coding: utf-8 -*-
+"""
+Cafe Fortune 라이브 스트림 시스템 - 배고파냥 통합 모듈
+Ngrok 실행 권한을 브레인 코어로 완전히 이관하고, 
+본 모듈은 코어가 열어둔 터널을 감지하여 브릿지 통신만 수행하는 무결점 서버입니다.
+"""
+import json
+import os
+import threading
+import time
+import urllib.request
+import asyncio
+from aiohttp import web
+
+def get_manifest():
+    return {
+        "id": "M_begopanyang",
+        "class_name": "BegopanyangServer",
+        "name": "배고파냥 메인 (코어통합형)",
+        "type": "game_plugin",
+        "description": "8340번 전용 포트를 통해 디렉터리 접근을 원천 차단하는 방화벽 내장 통합 서버입니다.",
+        "port": 8340, # [수정] 코어가 다른 포트를 할당하지 못하도록 8340으로 명시적 고정
+        "inout": ["in", "out"] # 양방향 통신 허용
+    }
+
+class BegopanyangServer:
+    def __init__(self, core_ref):
+        self.core_ref = core_ref
+        self.mod_id = "M_begopanyang"
+        self.ngrok_url = ""
+        self.assigned_port = None  
+        self.connected_clients = set()
+        self.loop = None
         
-        h1 { color: #00ccff; border-bottom: 2px solid #003366; padding-bottom: 10px; margin-top: 0; text-shadow: 0 0 5px rgba(0,204,255,0.5); }
-        h3 { color: #fff; margin-bottom: 15px; }
+        # 로컬 DB 저장소 경로 세팅 (마스터 독점)
+        self.db_dir = os.path.join(os.path.dirname(__file__), "data", "begopanyang")
+        self.master_db_path = os.path.join(self.db_dir, "master_assets.json")
+        self.user_db_path = os.path.join(self.db_dir, "user_data.json")
+        self.history_db_path = os.path.join(self.db_dir, "donor_history.json")
 
-        .section { background: #1a2332; padding: 20px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #2a3749; display: none; }
-        .section.active { display: block; animation: fadeIn 0.5s; }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .btn { padding: 10px 15px; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; background: #004488; color: white; transition: all 0.2s; font-family: inherit; }
-        .btn:hover { background: #0066cc; transform: translateY(-2px); }
-        .btn-success { background: #00aa55; }
-        .btn-success:hover { background: #00cc66; }
-        .btn-danger { background: #aa0033; }
-        .btn-danger:hover { background: #cc0044; }
-
-        input[type="text"], input[type="password"], input[type="number"], select { padding: 12px; background: #080c13; color: #00ffcc; border: 1px solid #004488; border-radius: 5px; font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.2s; width: 100%; box-sizing: border-box; }
-        input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus, select:focus { border-color: #00ccff; box-shadow: 0 0 8px rgba(0, 204, 255, 0.3); }
-
-        /* Login Area */
-        #login-area { text-align: center; padding: 40px 20px; }
-        #login-area input { max-width: 350px; text-align: center; margin-bottom: 15px; display: inline-block; }
-
-        /* Fixed Donor Area */
-        .fixed-donor-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; background: #080c13; padding: 15px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749; align-items: center; }
-        .fixed-list { margin-top: 15px; max-height: 200px; overflow-y: auto; }
-        .fixed-item { display: flex; justify-content: space-between; background: #111; padding: 10px; border-radius: 4px; margin-bottom: 5px; border-left: 3px solid #00ffcc; }
-
-        /* Food Mapping Area */
-        .mapping-row { display: flex; align-items: center; gap: 10px; background: #080c13; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #2a3749;}
-        .mapping-row select { flex: 2; }
-        .mapping-row .coin-input { display: flex; align-items: center; gap: 5px; flex: 3; }
-        .mapping-row input { width: 80px; text-align: center; }
-
-        /* Result Area */
-        .result-panel { background: #000; padding: 20px; border-radius: 8px; border: 1px solid #00aa55; text-align: center; margin-top: 20px; }
-        .url-box { background: #131a26; padding: 15px; border-radius: 5px; font-weight: bold; color: #00ffcc; word-break: break-all; margin: 15px 0; border: 1px dashed #00aa55; font-size: 14px;}
-        
-        .toast { position: fixed; top: 20px; right: 20px; background: #333; color: #fff; padding: 15px 20px; border-radius: 5px; border-left: 5px solid #00ffcc; z-index: 1000; opacity: 0; transition: 0.3s; pointer-events: none; }
-        .toast.show { opacity: 1; }
-        .toast.error { border-left-color: #ff0055; }
-    </style>
-</head>
-<body>
-    <div id="toast" class="toast"></div>
-
-    <div class="container">
-        <h1>🐾 배고파냥 - STREAMER DASHBOARD</h1>
-        
-        <!-- 1. 로그인 구역 -->
-        <div id="login-area" class="section active">
-            <h3>🔒 스트리머 계정 보안 로그인</h3>
-            <p style="color: #8892b0; font-size: 14px; margin-bottom: 25px;">
-                타인의 접근으로부터 게임 데이터를 보호하기 위해 비밀번호를 도입했습니다.<br>
-                <b style="color:#ffcc00;">최초 접속 시 입력한 비밀번호로 계정이 즉시 귀속(생성)되며</b>,<br>
-                이후부터는 해당 비밀번호를 알아야만 설정을 열람하고 수정할 수 있습니다.
-            </p>
-            <input type="text" id="streamer-id" placeholder="스트리머 ID (예: @user123)">
-            <br>
-            <input type="password" id="streamer-pw" placeholder="계정 비밀번호 (최초 접속 시 자동 설정됨)">
-            <br>
-            <button class="btn btn-success" style="font-size: 16px; padding: 12px 30px; margin-top:10px;" onclick="doLogin()">안전하게 로그인 및 세팅 시작</button>
-        </div>
-
-        <!-- 2. 대시보드 구역 -->
-        <div id="dashboard-area" style="display:none;">
-            <div style="background: #080c13; padding: 10px 20px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #00ccff; display: flex; justify-content: space-between; align-items: center;">
-                <div>현재 접속 계정: <b id="display-user-id" style="color:#00ffcc; font-size: 18px;"></b></div>
-                <div>
-                    <button class="btn" style="padding: 5px 15px; margin-right: 5px;" onclick="togglePasswordArea()">비밀번호 수정</button>
-                    <button class="btn btn-danger" style="padding: 5px 15px;" onclick="location.reload()">로그아웃</button>
-                </div>
-            </div>
-
-            <!-- 비밀번호 변경 구역 (초기 숨김) -->
-            <div id="password-change-area" style="display:none; background: #1a2332; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #004488;">
-                <h3 style="margin-top:0; color:#00ccff;">🔑 비밀번호 수정</h3>
-                
-                <!-- Step 1: 현재 비밀번호 확인 -->
-                <div id="pw-step-1">
-                    <p style="color: #8892b0; font-size: 13px;">본인 확인을 위해 현재 비밀번호를 먼저 입력해주세요.</p>
-                    <input type="password" id="check-current-pw" placeholder="현재 비밀번호 입력" style="max-width: 250px; margin-right: 10px;">
-                    <button class="btn btn-success" onclick="verifyCurrentPassword()">수정</button>
-                    <button class="btn btn-danger" onclick="togglePasswordArea()">취소</button>
-                </div>
-                
-                <!-- Step 2: 새 비밀번호 입력 (초기 숨김) -->
-                <div id="pw-step-2" style="display:none;">
-                    <p style="color: #00ffcc; font-size: 13px;">인증되었습니다. 새롭게 사용할 비밀번호를 입력해주세요.</p>
-                    <input type="password" id="input-new-pw" placeholder="새 비밀번호 입력" style="max-width: 250px; margin-right: 10px;">
-                    <button class="btn btn-success" onclick="executePasswordChange()">변경 완료</button>
-                    <button class="btn btn-danger" onclick="togglePasswordArea()">취소</button>
-                </div>
-            </div>
-
-            <!-- 먹이 맵핑 -->
-            <div class="section active">
-                <h3>1. 후원 먹이 코인 맵핑</h3>
-                <p style="color: #8892b0; font-size: 12px;">시청자가 후원한 코인의 범위(Min~Max)에 따라 어떤 먹이가 떨어질지 설정하세요.</p>
-                
-                <div id="mapping-container"></div>
-                <button class="btn" style="width: 100%; margin-top: 10px;" onclick="addMappingRow()">➕ 새로운 조건 추가하기</button>
-            </div>
-
-            <!-- 고정 후원자 지정 -->
-            <div class="section active">
-                <h3>2. 열혈 팬(VIP) 전용 고양이 고정 등록</h3>
-                <p style="color: #8892b0; font-size: 12px;">특정 닉네임의 후원자에게는 랜덤 고양이가 아닌, 지정된 고양이와 특별한 이름을 고정 부여합니다.</p>
-                
-                <div class="fixed-donor-row">
-                    <input type="text" id="vip-nickname" placeholder="후원자 닉네임 (정확히 입력)">
-                    <select id="vip-cat-select">
-                        <!-- JS에서 마스터 에셋 기반 렌더링 -->
-                    </select>
-                    <input type="text" id="vip-custom-name" placeholder="표시할 고양이 이름">
-                    <button class="btn btn-success" onclick="addFixedDonor()">등록</button>
-                </div>
-
-                <div class="fixed-list" id="fixed-donor-list">
-                    <!-- 등록된 VIP 목록 렌더링 -->
-                </div>
-            </div>
-
-            <!-- 저장 및 URL 발급 -->
-            <button class="btn btn-success" style="width: 100%; font-size: 20px; padding: 15px;" onclick="saveAndGenerate()">💾 서버에 설정 안전 저장 및 송출용 URL 발급</button>
-
-            <div id="result-area" class="result-panel" style="display: none;">
-                <h3 style="color:#00ffcc; margin-top:0;">✅ 귀하의 설정이 암호화되어 서버에 저장되었습니다!</h3>
-                <p style="color: #8892b0; font-size: 13px;">아래 발급된 URL을 OBS 브라우저 소스에 복사하여 붙여넣으세요.</p>
-                <div class="url-box" id="final-url"></div>
-                <button class="btn" onclick="copyUrl()">📋 URL 복사하기</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // ============================================================================
-        // 1. 상태 변수 및 유틸
-        // ============================================================================
-        let masterDB = { cats: {}, foods: {} };
-        let currentUser = "";
-        let currentPw = "";
-        let mappingCount = 0;
-        let fixedDonors = [];
-        let ws = null;
-        let autoNgrokUrl = ""; 
-
-        window.onload = () => {
-            const savedId = localStorage.getItem('bego_user_id');
-            if(savedId) document.getElementById('streamer-id').value = savedId;
-        };
-
-        function showToast(msg, isError = false) {
-            const toast = document.getElementById('toast');
-            toast.innerText = (isError ? "❌ " : "✅ ") + msg;
-            toast.className = `toast show ${isError ? 'error' : ''}`;
-            setTimeout(() => { toast.classList.remove('show'); }, 3000);
-        }
-
-        // ============================================================================
-        // 2. 로그인 인증 및 통신 로직
-        // ============================================================================
-        function doLogin() {
-            const id = document.getElementById('streamer-id').value.trim();
-            const pw = document.getElementById('streamer-pw').value.trim();
+    def _ensure_db(self):
+        """ 물리 파일이 없으면 초기화 생성 """
+        if not os.path.exists(self.db_dir):
+            os.makedirs(self.db_dir)
             
-            if(!id || !pw) return showToast('아이디와 비밀번호를 모두 입력해주세요.', true);
-            
-            localStorage.setItem('bego_user_id', id);
-            currentUser = id;
-            currentPw = pw;
-
-            initWebSocket(); 
-        }
-
-        function initWebSocket() {
-            if(ws) ws.close();
-            
-            // 마스터가 전달해준 URL에 포함된 ws 파라미터를 통해 보안 코어에 다이렉트 통신
-            const urlParams = new URLSearchParams(window.location.search);
-            let targetWsUrl = urlParams.get('ws');
-            
-            if (!targetWsUrl) {
-                // 로컬에서 마스터가 테스트할 때를 위한 Fallback
-                const wsPort = urlParams.get('port') || '8340';
-                targetWsUrl = `ws://127.0.0.1:${wsPort}`;
-            } else {
-                targetWsUrl = targetWsUrl.replace("https://", "wss://").replace("http://", "ws://");
-                if (!targetWsUrl.startsWith("ws")) targetWsUrl = "wss://" + targetWsUrl;
+        default_master = {
+            "cats": {
+                "calico": { "id": "calico", "tier": "free", "default_name": "포춘" },
+                "cheese": { "id": "cheese", "tier": "free", "default_name": "리온" }
+            },
+            "foods": {
+                "f1": { "id": "f1", "name": "멸치", "base_pt": 10 },
+                "f2": { "id": "f2", "name": "참치캔", "base_pt": 30 },
+                "f3": { "id": "f3", "name": "최고급 연어", "base_pt": 50 },
+                "f4": { "id": "f4", "name": "프리미엄 츄르", "base_pt": 100 }
             }
+        }
+        
+        for path, default in [(self.master_db_path, default_master),
+                              (self.user_db_path, {}),
+                              (self.history_db_path, {})]:
+            if not os.path.exists(path):
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(default, f, ensure_ascii=False, indent=2)
 
-            try {
-                ws = new WebSocket(targetWsUrl);
-            } catch(e) {
-                showToast("마스터 서버와의 통신에 실패했습니다. 링크를 확인하세요.", true);
-                return;
-            }
+    def _read_db(self, path):
+        with open(path, 'r', encoding='utf-8') as f: 
+            return json.load(f)
 
-            ws.onopen = () => {
-                showToast('🟢 서버 연결 성공. 인증을 진행합니다...', false);
-                // 비밀번호가 포함된 인증 패킷 발송
-                ws.send(JSON.stringify({ 
-                    action: "login", 
-                    payload: { streamer_id: currentUser, password: currentPw } 
-                }));
-            };
+    def _write_db(self, path, data):
+        with open(path, 'w', encoding='utf-8') as f: 
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
+    def start(self):
+        self._ensure_db()
+        threading.Thread(target=self._scan_core_ngrok, daemon=True).start()
+        threading.Thread(target=self._run_aiohttp_server, daemon=True).start()
+
+    def _run_aiohttp_server(self):
+        # [수정] 코어의 동적 할당을 무시하고 Ngrok과 매칭되는 8340 포트로 완전 하드코딩
+        port = 8340
+        print(f"[{self.mod_id}] 배고파냥 보안 방화벽 통합 서버를 포트 {port}번에서 가동합니다.")
+        
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        
+        async def cors_factory(app, handler):
+            async def cors_handler(request):
+                if request.method == 'OPTIONS':
+                    resp = web.Response()
+                else:
+                    resp = await handler(request)
+                    
+                # 🚨 [버그 수정] WebSocket 응답 객체에는 CORS 헤더를 강제 주입하면 RuntimeError가 발생하며 소켓이 즉시 끊어집니다.
+                if isinstance(resp, web.WebSocketResponse):
+                    return resp
+                    
+                resp.headers['Access-Control-Allow-Origin'] = '*'
+                resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+                resp.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+                return resp
+            return cors_handler
+            
+        app = web.Application(middlewares=[cors_factory])
+        
+        # 방화벽 엔진 가동 (403 차단 및 웹소켓 101 우회)
+        app.router.add_route('*', '/', self._root_handler)
+        
+        # 정적 파일 라우팅: 디렉터리 리스팅 차단
+        base_dir = os.path.dirname(__file__)
+        app.router.add_static('/modules/m_begopanyang/', path=base_dir, name='assets')
+        
+        runner = web.AppRunner(app)
+        
+        async def start_server():
+            await runner.setup()
+            site = web.TCPSite(runner, "0.0.0.0", port)
+            await site.start()
+            print(f"✅ [{self.mod_id}] 403 방화벽 및 통합 서버 개방 완료! (포트: {port})")
+            await asyncio.Future()
                 
-                // 로그인 인증 결과 처리
-                if (data.action === "login_res") {
-                    if (data.status === "success") {
-                        if (data.is_new) showToast('환영합니다! 신규 계정과 비밀번호가 귀속되었습니다.');
-                        else showToast('로그인 성공! 설정 데이터를 안전하게 불러왔습니다.');
+        try:
+            self.loop.run_until_complete(start_server())
+        except Exception as e:
+            print(f"❌ [{self.mod_id}] 통합 서버 바인딩 실패: {e}")
 
-                        document.getElementById('login-area').style.display = 'none';
-                        document.getElementById('dashboard-area').style.display = 'block';
-                        document.getElementById('display-user-id').innerText = currentUser;
+    async def _root_handler(self, request):
+        if request.headers.get('Upgrade', '').lower() == 'websocket':
+            return await self._ws_handler(request)
+        else:
+            return web.Response(
+                text="⛔ 403 Forbidden: Authorized WebSocket Interface Only. Directory Access Denied.", 
+                status=403
+            )
 
-                        autoNgrokUrl = data.data.ngrok_url || "";
-                        masterDB = data.data.master_assets;
-                        initSelectors();
-
-                        const userSettings = data.data.user_settings || {};
+    async def _ws_handler(self, request):
+        ws = web.WebSocketResponse()
+        await ws.prepare(request)
+        self.connected_clients.add(ws)
+        try:
+            async for msg in ws:
+                if msg.type == web.WSMsgType.TEXT:
+                    try:
+                        packet = json.loads(msg.data)
+                    except Exception:
+                        continue
+                    
+                    action = packet.get("action")
+                    
+                    # -------------------------------------------------------------
+                    # 1. 스트리머 전용 암호화 로그인 로직 (최초 접속시 비밀번호 자동 고정)
+                    # -------------------------------------------------------------
+                    if action == "login":
+                        payload = packet.get("payload") or {}
+                        user_id = payload.get("streamer_id")
+                        password = payload.get("password")
                         
-                        document.getElementById('mapping-container').innerHTML = ''; 
-                        if(userSettings.foodMappings && userSettings.foodMappings.length > 0) {
-                            userSettings.foodMappings.forEach(m => addMappingRow(m));
-                        } else {
-                            const foodKeys = Object.keys(masterDB.foods);
-                            if (foodKeys.length > 0) foodKeys.forEach(key => addMappingRow({ foodId: key, minCoin: '', maxCoin: '' }));
-                            else addMappingRow();
+                        if not user_id or not password:
+                            await ws.send_str(json.dumps({"action": "login_res", "status": "fail", "msg": "ID와 비밀번호를 모두 입력해주세요."}, ensure_ascii=False))
+                            continue
+                            
+                        u_db = self._read_db(self.user_db_path)
+                        is_new = False
+                        
+                        # 신규 접속자: 비밀번호와 함께 DB에 슬롯 영구 생성
+                        if user_id not in u_db:
+                            u_db[user_id] = {"password": password, "settings": {}}
+                            self._write_db(self.user_db_path, u_db)
+                            is_new = True
+                            user_settings = {}
+                        # 기존 접속자: 비밀번호 검증
+                        else:
+                            if u_db[user_id].get("password") != password:
+                                await ws.send_str(json.dumps({"action": "login_res", "status": "fail", "msg": "비밀번호가 일치하지 않습니다. 타인의 계정에 접근할 수 없습니다."}, ensure_ascii=False))
+                                continue
+                            user_settings = u_db[user_id].get("settings", {})
+                            
+                        # [보안 코어]: 전체 DB 노출 금지. 마스터 리소스와 해당 스트리머의 세팅값만 전송.
+                        res = {
+                            "action": "login_res",
+                            "status": "success",
+                            "is_new": is_new,
+                            "data": {
+                                "master_assets": self._read_db(self.master_db_path),
+                                "user_settings": user_settings,
+                                "ngrok_url": self.ngrok_url
+                            }
                         }
-
-                        if(userSettings.fixedDonors) {
-                            fixedDonors = userSettings.fixedDonors;
-                            renderFixedDonors();
+                        await ws.send_str(json.dumps(res, ensure_ascii=False))
+                        
+                    # -------------------------------------------------------------
+                    # 2. OBS 송출 화면(Viewer) 데이터 초기 로드용 (읽기 전용)
+                    # -------------------------------------------------------------
+                    elif action == "viewer_init":
+                        payload = packet.get("payload") or {}
+                        user_id = payload.get("streamer_id")
+                        
+                        u_db = self._read_db(self.user_db_path)
+                        history_db = self._read_db(self.history_db_path)
+                        
+                        user_settings = u_db.get(user_id, {}).get("settings", {})
+                        user_history = history_db.get(user_id, {})
+                        
+                        res = {
+                            "action": "viewer_init_res",
+                            "status": "success",
+                            "data": {
+                                "user_settings": user_settings,
+                                "donor_history": user_history
+                            }
                         }
-                    } else {
-                        // 비밀번호 불일치 등 인증 실패
-                        showToast(data.msg, true);
-                    }
+                        await ws.send_str(json.dumps(res, ensure_ascii=False))
+                        
+                    # -------------------------------------------------------------
+                    # 3. 스트리머 설정 안전 저장 로직 (저장 시에도 비밀번호 재검증)
+                    # -------------------------------------------------------------
+                    elif action == "save_user_data":
+                        payload = packet.get("payload") or {}
+                        user_id = payload.get("streamer_id")
+                        password = payload.get("password")
+                        settings = payload.get("settings", {})
+                        
+                        u_db = self._read_db(self.user_db_path)
+                        if user_id in u_db and u_db[user_id].get("password") == password:
+                            u_db[user_id]["settings"] = settings
+                            self._write_db(self.user_db_path, u_db)
+                            await ws.send_str(json.dumps({"action": "save_user_data_res", "status": "success"}, ensure_ascii=False))
+                        else:
+                            await ws.send_str(json.dumps({"action": "save_user_data_res", "status": "fail", "msg": "권한 인증에 실패했습니다."}, ensure_ascii=False))
+
+                    # -------------------------------------------------------------
+                    # 4. 비밀번호 수정 로직
+                    # -------------------------------------------------------------
+                    elif action == "change_password":
+                        payload = packet.get("payload") or {}
+                        user_id = payload.get("streamer_id")
+                        old_pw = payload.get("old_password")
+                        new_pw = payload.get("new_password")
+                        
+                        u_db = self._read_db(self.user_db_path)
+                        if user_id in u_db and u_db[user_id].get("password") == old_pw:
+                            u_db[user_id]["password"] = new_pw
+                            self._write_db(self.user_db_path, u_db)
+                            await ws.send_str(json.dumps({"action": "change_password_res", "status": "success"}, ensure_ascii=False))
+                        else:
+                            await ws.send_str(json.dumps({"action": "change_password_res", "status": "fail", "msg": "현재 비밀번호 인증에 실패했습니다."}, ensure_ascii=False))
+
+                    # -------------------------------------------------------------
+                    # 5. [신규] 게임 진행 데이터(History) 새로시작(초기화) 로직
+                    # -------------------------------------------------------------
+                    elif action == "reset_history":
+                        payload = packet.get("payload") or {}
+                        user_id = payload.get("streamer_id")
+                        password = payload.get("password")
+                        
+                        u_db = self._read_db(self.user_db_path)
+                        if user_id in u_db and u_db[user_id].get("password") == password:
+                            h_db = self._read_db(self.history_db_path)
+                            if user_id in h_db:
+                                del h_db[user_id]
+                                self._write_db(self.history_db_path, h_db)
+                            await ws.send_str(json.dumps({"action": "reset_history_res", "status": "success"}, ensure_ascii=False))
+                        else:
+                            await ws.send_str(json.dumps({"action": "reset_history_res", "status": "fail", "msg": "권한 인증에 실패했습니다."}, ensure_ascii=False))
+
+        except Exception as e:
+            pass
+        finally:
+            self.connected_clients.remove(ws)
+        return ws
+
+    def broadcast_to_clients(self, data):
+        if not self.loop or not self.connected_clients:
+            return
+        async def do_broadcast():
+            message = json.dumps(data, ensure_ascii=False)
+            for client in list(self.connected_clients):
+                try:
+                    await client.send_str(message)
+                except Exception:
+                    pass
+        asyncio.run_coroutine_threadsafe(do_broadcast(), self.loop)
+
+    def _scan_core_ngrok(self):
+        for _ in range(10):
+            time.sleep(3.0)
+            try:
+                req = urllib.request.Request("http://127.0.0.1:4040/api/tunnels")
+                with urllib.request.urlopen(req) as response:
+                    data = json.loads(response.read().decode('utf-8'))
+                    for tunnel in data.get('tunnels', []):
+                        if tunnel.get('proto') == 'https':
+                            raw_url = tunnel.get('public_url')
+                            self.ngrok_url = raw_url.replace("https://", "wss://").replace("http://", "wss://")
+                            print(f"\n==================================================")
+                            print(f"✅ [{self.mod_id}] 브레인 코어의 전역 Ngrok 터널 감지 완료!")
+                            print(f"👉 깃허브 연동 통신 주소: {self.ngrok_url}")
+                            print(f"==================================================\n")
+                            return
+            except Exception:
+                continue
+        print(f"⚠️ [{self.mod_id}] 브레인 코어의 Ngrok 터널을 찾지 못했습니다.")
+
+    async def check_and_process(self, packet):
+        try:
+            action = packet.get("action")
+            if not action and isinstance(packet.get("content"), dict):
+                action = packet.get("content").get("action")
+
+            content = packet.get("content", {})
+            if content.get("type") == "GIFT" or content.get("is_gift"):
+                gift_data = {
+                    "action": "live_donation",
+                    "target_broadcaster": packet.get("meta", {}).get("channel_id") or packet.get("meta", {}).get("target_broadcaster", ""),
+                    "donor_nickname": packet.get("meta", {}).get("user", "익명"),
+                    "coin_value": content.get("coin_value", 0),
+                    "gift_count": content.get("gift_count", 1)
                 }
-
-                if (data.action === "save_user_data_res") {
-                    if(data.status === "success") showToast('설정이 서버에 안전하게 저장되었습니다!');
-                    else showToast('저장 실패: ' + data.msg, true);
-                }
-
-                if (data.action === "change_password_res") {
-                    if(data.status === "success") {
-                        currentPw = document.getElementById('input-new-pw').value.trim();
-                        togglePasswordArea();
-                        showToast('비밀번호가 성공적으로 변경되었습니다!');
-                    } else {
-                        showToast('비밀번호 변경 실패: ' + data.msg, true);
-                    }
-                }
-            };
-
-            ws.onclose = () => {
-                showToast('🔴 통신 서버와 연결이 끊어졌습니다.', true);
-            };
-        }
-
-        // ============================================================================
-        // 2-1. 비밀번호 변경 로직
-        // ============================================================================
-        function togglePasswordArea() {
-            const area = document.getElementById('password-change-area');
-            if(area.style.display === 'none') {
-                area.style.display = 'block';
-                document.getElementById('pw-step-1').style.display = 'block';
-                document.getElementById('pw-step-2').style.display = 'none';
-                document.getElementById('check-current-pw').value = '';
-                document.getElementById('input-new-pw').value = '';
-            } else {
-                area.style.display = 'none';
-            }
-        }
-
-        function verifyCurrentPassword() {
-            const enteredPw = document.getElementById('check-current-pw').value.trim();
-            if(!enteredPw) return showToast('현재 비밀번호를 입력해주세요.', true);
-            
-            if(enteredPw === currentPw) {
-                document.getElementById('pw-step-1').style.display = 'none';
-                document.getElementById('pw-step-2').style.display = 'block';
-                showToast('비밀번호가 확인되었습니다. 새 비밀번호를 입력하세요.');
-            } else {
-                showToast('현재 비밀번호가 일치하지 않습니다.', true);
-            }
-        }
-
-        function executePasswordChange() {
-            const newPw = document.getElementById('input-new-pw').value.trim();
-            if(!newPw) return showToast('새 비밀번호를 입력해주세요.', true);
-            if(newPw === currentPw) return showToast('기존 비밀번호와 동일합니다.', true);
-
-            if(ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ 
-                    action: "change_password", 
-                    payload: { streamer_id: currentUser, old_password: currentPw, new_password: newPw } 
-                }));
-            } else {
-                showToast('서버와 연결되어 있지 않습니다.', true);
-            }
-        }
-
-        // ============================================================================
-        // 3. UI 렌더링 및 제어 (동일)
-        // ============================================================================
-        function initSelectors() {
-            const catSelect = document.getElementById('vip-cat-select');
-            catSelect.innerHTML = '<option value="">-- 고양이 선택 --</option>';
-            Object.values(masterDB.cats).forEach(cat => {
-                catSelect.innerHTML += `<option value="${cat.id}">${cat.default_name || cat.name}</option>`;
-            });
-        }
-
-        function addMappingRow(existingData = null) {
-            mappingCount++;
-            const container = document.getElementById('mapping-container');
-            const rowId = `map-row-${mappingCount}`;
-            
-            let foodOptions = `<option value="">-- 드랍될 먹이 선택 --</option>`;
-            Object.values(masterDB.foods).forEach(f => {
-                const isSelected = (existingData && existingData.foodId === f.id) ? 'selected' : '';
-                foodOptions += `<option value="${f.id}" ${isSelected}>${f.name}</option>`;
-            });
-
-            const minVal = existingData ? existingData.minCoin : '';
-            const maxVal = existingData ? existingData.maxCoin : '';
-
-            const row = document.createElement('div');
-            row.className = 'mapping-row';
-            row.id = rowId;
-            row.innerHTML = `
-                <select class="map-food">${foodOptions}</select>
-                <div class="coin-input">
-                    <span style="color:#aaa; font-size:12px;">코인</span>
-                    <input type="number" class="map-min" placeholder="Min" min="0" value="${minVal}">
-                    <span style="color:#aaa;">~</span>
-                    <input type="number" class="map-max" placeholder="Max" min="0" value="${maxVal}">
-                </div>
-                <button class="btn btn-danger" style="padding: 10px;" onclick="document.getElementById('${rowId}').remove()">X</button>
-            `;
-            container.appendChild(row);
-        }
-
-        function addFixedDonor() {
-            const nick = document.getElementById('vip-nickname').value.trim();
-            const catId = document.getElementById('vip-cat-select').value;
-            const customName = document.getElementById('vip-custom-name').value.trim();
-
-            if(!nick || !catId || !customName) return showToast('모든 정보를 입력해주세요.', true);
-            if(fixedDonors.find(d => d.nickname === nick)) return showToast('이미 등록된 닉네임입니다.', true);
-
-            fixedDonors.push({ nickname: nick, catId: catId, customName: customName });
-            renderFixedDonors();
-            
-            document.getElementById('vip-nickname').value = '';
-            document.getElementById('vip-cat-select').value = '';
-            document.getElementById('vip-custom-name').value = '';
-            showToast(`${nick} 님의 고정 고양이가 등록되었습니다.`);
-        }
-
-        function removeFixedDonor(nick) {
-            fixedDonors = fixedDonors.filter(d => d.nickname !== nick);
-            renderFixedDonors();
-        }
-
-        function renderFixedDonors() {
-            const list = document.getElementById('fixed-donor-list');
-            list.innerHTML = '';
-            fixedDonors.forEach(d => {
-                const catObj = masterDB.cats[d.catId];
-                const catName = catObj ? (catObj.default_name || catObj.name) : '알수없음';
-                list.innerHTML += `
-                    <div class="fixed-item">
-                        <div>
-                            <b style="color:#ffcc00;">[${d.nickname}]</b> 
-                            <span style="color:#aaa; font-size:12px; margin-left:10px;">🐈 ${catName} / 이름: ${d.customName}</span>
-                        </div>
-                        <button class="btn btn-danger" style="padding: 5px 10px; font-size:12px;" onclick="removeFixedDonor('${d.nickname}')">삭제</button>
-                    </div>
-                `;
-            });
-        }
-
-        // ============================================================================
-        // 4. 저장 및 깃허브 Viewer URL 발급 (비밀번호 포함 보안 통신)
-        // ============================================================================
-        function saveAndGenerate() {
-            const mappings = [];
-            const rows = document.querySelectorAll('.mapping-row');
-            let mappingValid = true;
-
-            rows.forEach(row => {
-                const foodId = row.querySelector('.map-food').value;
-                const minC = parseInt(row.querySelector('.map-min').value);
-                const maxC = parseInt(row.querySelector('.map-max').value);
-                if(!foodId) { mappingValid = false; return; }
-                mappings.push({ foodId: foodId, minCoin: isNaN(minC) ? 0 : minC, maxCoin: isNaN(maxC) ? 999999 : maxC });
-            });
-
-            if(!mappingValid || mappings.length === 0) return showToast('먹이 맵핑 조건을 최소 1개 입력해주세요.', true);
-
-            const payload = {
-                streamer_id: currentUser,
-                password: currentPw, // 보안 저장을 위해 암호 재전송
-                settings: {
-                    foodMappings: mappings,
-                    fixedDonors: fixedDonors
-                }
-            };
-
-            if(ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ action: "save_user_data", payload: payload }));
-            } else {
-                return showToast('코어 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
-            }
-
-            // [발급 핵심] 깃허브에 올라간 순수 렌더링용 Viewer.html 주소
-            const githubViewerBase = "https://smith-xenai.github.io/catgame/Viewer.html";
-            const urlObj = new URL(githubViewerBase);
-            
-            urlObj.searchParams.set('user', currentUser);
-            
-            // 로컬 8340에서 수신한 Ngrok 터널 주소를 뷰어 파라미터로 암호화 삽입
-            if (autoNgrokUrl) {
-                urlObj.searchParams.set('ws', autoNgrokUrl);
-            } else {
-                // 테스트용 로컬 Fallback
-                const urlParams = new URLSearchParams(window.location.search);
-                const wsPort = urlParams.get('port') || '8340';
-                urlObj.searchParams.set('port', wsPort);
-            }
-
-            document.getElementById('final-url').innerText = urlObj.toString();
-            document.getElementById('result-area').style.display = 'block';
-            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-        }
-
-        function copyUrl() {
-            navigator.clipboard.writeText(document.getElementById('final-url').innerText);
-            showToast('OBS용 URL이 복사되었습니다.');
-        }
-    </script>
-</body>
-</html>
+                self.broadcast_to_clients(gift_data)
+                
+                if hasattr(self.core_ref, 'signal_broker'):
+                    await self.core_ref.signal_broker.route_packet(self.mod_id, gift_data)
+                return True
+        except Exception as e:
+            pass
+        return True
