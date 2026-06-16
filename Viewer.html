@@ -33,15 +33,18 @@
         // Ngrok 외부 접속 경로 파싱
         const urlParams = new URLSearchParams(window.location.search);
         const ngrokWs = urlParams.get('ws');
-        let assetBaseUrl = "http://127.0.0.1:8340"; // 지정된 포트 8340
+        
+        // [수정됨] 마스터 지시에 따라 기본 포트를 8001로 변경
+        let assetBaseUrl = "http://127.0.0.1:8001"; 
         
         if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
             let cleanNgrok = ngrokWs.replace(/\/+$/, "");
             assetBaseUrl = cleanNgrok.replace("wss://", "https://").replace("ws://", "http://");
         }
 
-        const LOCAL_CAT_DB_URL = `${assetBaseUrl}/d_catdesign/`;
-        const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/d_fooddesign/`;
+        // [수정됨] 마스터 지시에 따라 모듈 내부의 이미지 경로로 재설정
+        const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_catdesign/`;
+        const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_fooddesign/`;
 
         // 기본 3종 랜덤 풀 (하드코딩 - 마스터DB ID 기준)
         const DEFAULT_CATS = ['cat1', 'cat2', 'cat3']; 
@@ -240,7 +243,7 @@
                 let targetAnim = null;
                 
                 if (catObj && catObj.filename) {
-                    const baseName = catObj.filename.replace('_idle', ''); // 블루_idle_s.gif -> 블루_s.gif 로직은 실제 DB 구축 방식에 따라 다름. 여기선 단순 교체
+                    const baseName = catObj.filename.replace('_idle', ''); 
                     const stateTag = this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' ? 'move' : 
                                      this.state === 'EATING' ? 'eat' : 
                                      this.state === 'SLEEPING' ? 'sleep' : 'idle';
@@ -468,6 +471,7 @@
             const statusEl = document.getElementById('connection-status');
 
             try { 
+                // 통신용 포트 8340 적용
                 let targetWsUrl = `ws://127.0.0.1:8340`;
                 if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
                     let cleanNgrok = ngrokWs.replace(/\/+$/, "");
