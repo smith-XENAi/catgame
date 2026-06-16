@@ -335,14 +335,14 @@
             const parts = filename.split('_');
             return {
                 name: parts[0] || 'Unknown',
-                isPaid: filename.includes('#s')
+                isPaid: filename.includes('_s')
             };
         }
 
         function parseFoodFilename(filename) {
             let name = 'Unknown';
             let exp = 0;
-            let isPaid = filename.includes('#s');
+            let isPaid = filename.includes('_s');
             
             if(filename.includes('_m_')) {
                 name = filename.split('_m_')[0];
