@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>배고파냥 - 라이브 송출 뷰어</title>
     <style>
-        /* 기본 레이아웃 및 캔버스 (Zero-Control) */
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
         canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; position: relative; z-index: 60; pointer-events: none; }
-        
         #connection-status { position: absolute; top: 15px; right: 15px; font-size: 14px; color: #00ff00; z-index: 100; text-shadow: 1px 1px 0 #000; font-weight: bold; }
     </style>
 </head>
@@ -30,7 +28,7 @@
         let foods = [];
         let floatTexts = [];
 
-        // Ngrok 외부 접속 경로 파싱
+        // Ngrok 터널 경로 파싱 (이미지 에셋 포트 8340 일치화)
         const urlParams = new URLSearchParams(window.location.search);
         const ngrokWs = urlParams.get('ws');
         let assetBaseUrl = "http://127.0.0.1:8340";
@@ -62,10 +60,7 @@
             }
             if (foods && foods.length > 0) {
                 const wRatio = oldW ? (newW / oldW) : 1;
-                foods.forEach(f => {
-                    f.x *= wRatio;
-                    if (f.isGrounded) f.y = newH - 100;
-                });
+                foods.forEach(f => { f.x *= wRatio; if (f.isGrounded) f.y = newH - 100; });
             }
 
             canvas.width = newW; 
@@ -82,15 +77,12 @@
         class Cat {
             constructor(donorData, rank) {
                 this.donorName = donorData.nickname;
-                // 기본 썸네일 방어 코드
                 this.donorThumb = donorData.thumb || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNDQ0Ii8+PC9zdmc+';
-                
                 this.totalCoin = donorData.totalCoin;
                 this.rank = rank;
                 this.catId = donorData.catId;
                 
                 this.stateData = donorData.stats; 
-                
                 this.x = window.innerWidth + 100;
                 this.y = canvas.height - 100;
                 this.state = 'ENTER'; 
@@ -108,13 +100,13 @@
                 this.domElement.style.imageRendering = 'pixelated'; 
                 this.domElement.style.display = 'none';
                 
+                // 이미지 로드 실패 시 숨김 처리 방어 로직
                 this.domElement.onerror = () => { this.domElement.style.opacity = '0'; };
                 this.domElement.onload = () => { this.domElement.style.opacity = '1'; };
                 
                 document.body.appendChild(this.domElement);
                 this.currentAnimSrc = null;
 
-                // 아바타 렌더링용 객체 생성
                 this.avatarImg = new Image();
                 this.avatarImg.src = this.donorThumb;
             }
@@ -124,9 +116,7 @@
                 this.rank = rank;
             }
 
-            exit() {
-                this.state = 'EXIT';
-            }
+            exit() { this.state = 'EXIT'; }
 
             update() {
                 this.speedPerFrame = this.stateData.speed / 60;
@@ -152,9 +142,7 @@
                 
                 if (this.state === 'SLEEPING') {
                     this.stateData.hp += (this.stateData.maxHp * 0.03) / 60; 
-                    if (this.stateData.hp >= this.stateData.maxHp * 0.3) {
-                        this.state = 'IDLE'; 
-                    }
+                    if (this.stateData.hp >= this.stateData.maxHp * 0.3) this.state = 'IDLE'; 
                     return; 
                 }
 
@@ -230,7 +218,6 @@
                                 else this.stateData.maxHp += 1;
                             }
                             this.stateData.hp = this.stateData.maxHp; 
-
                             floatTexts.push({ text: "✨LEVEL UP!✨", x: this.x, y: this.y - 80, life: 100, color: '#00ffcc' });
                         }
                     }
@@ -238,7 +225,7 @@
             }
 
             draw() {
-                // 마스터 DB 구조 기반 파일 경로 동적 파싱
+                // 마스터 DB에서 실제 고양이 데이터 파싱 (복구됨)
                 const catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
                 let targetAnim = null;
                 
@@ -247,6 +234,7 @@
                                      this.state === 'EATING' ? 'eat' : 
                                      this.state === 'SLEEPING' ? 'sleep' : 'idle';
                     
+                    // idle 텍스트를 현재 상태(move, eat, sleep)로 치환하여 애니메이션 연결 완벽 복구
                     const newFileName = catObj.filename.replace('idle', stateTag);
                     targetAnim = `${LOCAL_CAT_DB_URL}${catObj.folder}/${newFileName}`;
                 }
@@ -266,31 +254,28 @@
                 }
 
                 // ==========================================
-                // 100x50 규격화된 UI 박스 렌더링
+                // 100x50 UI 박스 규격화 렌더링
                 // ==========================================
                 const boxW = 100;
                 const boxH = 50;
                 const startX = this.x - (boxW / 2);
                 const textY = this.y - 85; 
                 
-                // 반투명 배경
+                // 박스 배경
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
                 ctx.fillRect(startX, textY - 15, boxW, boxH);
                 ctx.strokeStyle = 'rgba(0, 204, 255, 0.5)';
                 ctx.lineWidth = 1;
                 ctx.strokeRect(startX, textY - 15, boxW, boxH);
 
-                // 1행: 아바타 + 닉네임 (6글자 제한)
-                if (this.avatarImg) {
-                    ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
-                }
-                
+                // 1행: 아바타 + 닉네임 (6글자)
+                if (this.avatarImg) ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
                 let shortName = this.donorName.substring(0, 6);
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 11px "Courier New"';
                 ctx.fillText(shortName, startX + 25, textY + 2);
 
-                // 2행: 레벨 및 게이지 바
+                // 2행: 레벨 및 게이지
                 const barY = textY + 15;
                 ctx.fillStyle = '#ffcc00';
                 ctx.font = 'bold 10px "Courier New"';
@@ -327,12 +312,15 @@
             if(!foodObj || !foodObj.filename) return;
 
             const imgUrl = `${LOCAL_FOOD_DB_URL}${foodObj.folder}/${foodObj.filename}`;
+            
+            // 먹이 마스터가 부여한 고유 경험치(base_pt)를 최우선 적용 (복구됨)
+            const expAmount = foodObj.base_pt || 10; 
 
             for(let i=0; i<quantity; i++) {
                 let fData = {
                     mapId: mappingData.foodId,
-                    pt: Number(mappingData.pt) || 10,
-                    maxPt: Number(mappingData.pt) || 10,
+                    pt: expAmount,
+                    maxPt: expAmount,
                     x: Math.random() * (canvas.width - 100) + 50,
                     y: -100 - (i * 20), 
                     w: 100, 
@@ -349,7 +337,6 @@
                 fData.domElement.style.objectPosition = 'left top';
                 
                 fData.domElement.onerror = () => { fData.domElement.style.display = 'none'; };
-
                 document.body.appendChild(fData.domElement);
                 foods.push(fData);
             }
@@ -394,19 +381,18 @@
                 ft.life--;
                 if (ft.life <= 0) floatTexts.splice(i, 1);
             }
-
             requestAnimationFrame(renderEngine);
         }
 
         /* =========================================================================
-           4. 후원 처리 및 밀어내기 랭킹 시스템 로직
+           4. 후원 처리 및 밀어내기 랭킹 시스템 로직 (랜덤 배정 복구)
         ========================================================================= */
         function processDonation(donationData) {
             if (!userData.settings || !userData.settings.foodMappings) return;
 
             const donorName = donationData.donor_nickname || 'Unknown';
             const coin = donationData.coin_value || 0;
-            const thumbUrl = donationData.thumb || null; // 패킷에서 썸네일 수신
+            const thumbUrl = donationData.thumb || null; 
 
             if (!donorHistory[donorName]) {
                 const fixed = (userData.settings.fixedDonors || []).find(d => d.nickname === donorName);
@@ -416,10 +402,11 @@
                 let eat = 10 + Math.floor(Math.random() * 40); remaining -= eat;
                 let hp = 10 + (remaining * 2); 
 
+                // 하드코딩 완전 제거! 마스터 DB에 있는 실제 고양이 중에서만 랜덤 배정
                 const availableCats = Object.keys(masterDB.cats || {});
-                let defaultCat = availableCats.length > 0 ? availableCats[0] : null;
+                let randomCatId = availableCats.length > 0 ? availableCats[Math.floor(Math.random() * availableCats.length)] : null;
 
-                let catId = fixed ? fixed.catId : defaultCat; 
+                let catId = fixed ? fixed.catId : randomCatId; 
                 let customName = fixed ? fixed.customName : donorName;
 
                 donorHistory[donorName] = { 
@@ -435,12 +422,10 @@
 
             for (let m of userData.settings.foodMappings) {
                 if (coin >= m.minCoin && coin <= m.maxCoin) {
-                    m.pt = m.pt || (coin * 10); 
                     spawnFood(m, 1);
                     break;
                 }
             }
-
             updateRankings();
         }
 
@@ -453,17 +438,12 @@
                 const rank = index + 1;
                 const existingCat = activeCats.find(c => c.donorName === donor.nickname && c.state !== 'EXIT');
                 
-                if (existingCat) {
-                    existingCat.updateData(donor.totalCoin, rank);
-                } else {
-                    activeCats.push(new Cat(donor, rank)); 
-                }
+                if (existingCat) existingCat.updateData(donor.totalCoin, rank);
+                else activeCats.push(new Cat(donor, rank)); 
             });
 
             activeCats.forEach(cat => {
-                if (!top3Nicknames.includes(cat.donorName) && cat.state !== 'EXIT') {
-                    cat.exit(); 
-                }
+                if (!top3Nicknames.includes(cat.donorName) && cat.state !== 'EXIT') cat.exit(); 
             });
         }
 
@@ -492,11 +472,7 @@
             ws.onopen = () => {
                 statusEl.innerText = "🟢 시스템 연결 성공";
                 statusEl.style.color = "#00ff00";
-                
-                ws.send(JSON.stringify({ 
-                    action: "viewer_init", 
-                    payload: { streamer_id: currentUser } 
-                }));
+                ws.send(JSON.stringify({ action: "viewer_init", payload: { streamer_id: currentUser } }));
             };
         
             ws.onmessage = (event) => {
@@ -514,11 +490,8 @@
                     if (Object.keys(donorHistory).length > 0) updateRankings();
                 }
 
-                if (data.action === "live_donation") {
-                    if (userData.settings) {
-                        // 패킷 전체를 객체로 던져서 아바타 URL(thumb)까지 추출하게끔 수정완료
-                        processDonation(data);
-                    }
+                if (data.action === "live_donation" && userData.settings) {
+                    processDonation(data);
                 }
             };
 
