@@ -218,9 +218,9 @@
                 // 마스터 DB 구조 기반 파일 경로 유추
                 let catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
                 
-                // [오류 방어] 과거 무효한 ID(예: 'cat1')가 기록되어 있다면, 현재 유효한 랜덤 고양이로 강제 교체하여 등장시킵니다.
+                // [오류 방어] 무효한 ID(예: 'cat1')가 기록되어 있다면, 현재 유효한 랜덤 고양이로 강제 교체하여 등장시킵니다.
                 if (!catObj && masterDB.cats) {
-                    let fallbackCats = Object.keys(masterDB.cats).filter(k => masterDB.cats[k].filename && masterDB.cats[k].filename.includes('idle'));
+                    let fallbackCats = Object.keys(masterDB.cats).filter(k => masterDB.cats[k] && masterDB.cats[k].filename && masterDB.cats[k].filename.includes('idle'));
                     if (fallbackCats.length > 0) {
                         this.catId = fallbackCats[Math.floor(Math.random() * fallbackCats.length)];
                         catObj = masterDB.cats[this.catId];
@@ -497,6 +497,31 @@
                 const data = JSON.parse(event.data);
                 
                 if (data.action === "viewer_init_res") {
+                    userData.settings = data.data.user_settings || { foodMappings: [], fixedDonors: [] };
+                    masterDB = data.data.master_assets || { cats: {}, foods: {} };
+                    donorHistory = data.data.donor_history || {};
+                    
+                    if (Object.keys(donorHistory).length > 0) updateRankings();
+                }
+
+                if (data.action === "live_donation") {
+                    // [치명적 오류 수정] 숫자형 ID 발생 시 TypeError 방지를 위해 명시적 String() 변환 추가
+                    let isMyChannel = true;
+                    if (data.target_broadcaster && currentUser) {
+                        const target = String(data.target_broadcaster).toLowerCase();
+                        const current = String(currentUser).toLowerCase().replace('@', '');
+                        if (target !== current && !target.includes(current) && !current.includes(target)) {
+                            isMyChannel = false;
+                        }
+                    }
+                    
+                    if (isMyChannel && userData.settings) {
+                        processDonation(data); // 통째로 넘겨 thumb 처리
+                    }
+                }
+            };
+
+            ws.onclose = () => {
                 statusEl.innerText = "🔴 서버 연결 끊김 (재접속 대기)";
                 statusEl.style.color = "#ff0000";
                 setTimeout(initWebSocket, 3000);
