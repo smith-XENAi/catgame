@@ -25,9 +25,10 @@
         let foods = [];
         let floatTexts = [];
 
+        // Ngrok 외부 접속 경로 파싱
         const urlParams = new URLSearchParams(window.location.search);
         const ngrokWs = urlParams.get('ws');
-        let assetBaseUrl = "http://127.0.0.1:8340";
+        let assetBaseUrl = "http://127.0.0.1:8340"; // 지정된 포트 8340
         
         if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
             let cleanNgrok = ngrokWs.replace(/\/+$/, "");
@@ -36,7 +37,6 @@
 
         const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_catdesign/`;
         const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_fooddesign/`;
-
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
