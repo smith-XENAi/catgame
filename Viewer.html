@@ -96,7 +96,6 @@
                 this.currentAnimSrc = null;
 
                 this.avatarImg = new Image();
-                // [수정] 원격 이미지가 깨졌을 경우 즉시 기본 아이콘으로 덮어씌워 에러를 방어합니다.
                 this.avatarImg.onerror = () => {
                     this.avatarImg.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNDQ0Ii8+PC9zdmc+';
                     this.avatarImg.onerror = null;
@@ -112,19 +111,25 @@
             exit() { this.state = 'EXIT'; }
 
             update() {
-                let fps = 30;
-                // [수정] 1초(60fps)에 해당 스텟만큼 픽셀을 전진/섭취하도록 프레임당 속도를 정교하게 치환합니다.
-                this.speedPerFrame = (this.stateData.speed / fps) + (Math.random() * 0.02 - 0.01);
-                this.eatPerFrame = (this.stateData.eating / fps) + (Math.random() * 0.02 - 0.01);
+                // [수정] 스테이지 100포인트 분할 및 스텟 기반 이동/체력 1:1 물리엔진
+                let fps = 60; 
+                let stageUnit = canvas.width / 100; // 스테이지를 100포인트로 나눈 1포인트당 픽셀 값
+                
+                // fps 30기준 2초(60프레임)에 스텟만큼 이동 = 프레임당 (스텟 / 60) 포인트 이동
+                let pointSpeedPerFrame = (this.stateData.speed / 60) + (Math.random() * 0.02 - 0.01);
+                let pointEatPerFrame = (this.stateData.eating / 60) + (Math.random() * 0.02 - 0.01);
+
+                this.speedPerFrame = pointSpeedPerFrame * stageUnit; 
+                this.eatPerFrame = pointEatPerFrame; 
 
                 if (this.state === 'ENTER') {
-                    this.x -= Math.max(3, this.speedPerFrame * 2);
+                    this.x -= Math.max(3, this.speedPerFrame * 1.5);
                     this.direction = -1;
                     if (this.x < window.innerWidth - 150) this.state = 'IDLE';
                     return;
                 }
                 if (this.state === 'EXIT') {
-                    this.x += Math.max(4, this.speedPerFrame * 3);
+                    this.x += Math.max(4, this.speedPerFrame * 2);
                     this.direction = 1;
                     if (this.x > window.innerWidth + 150) {
                         this.domElement.remove();
@@ -136,8 +141,12 @@
                 if (this.stateData.hp <= 0) this.state = 'SLEEPING';
                 
                 if (this.state === 'SLEEPING') {
-                    this.stateData.hp += (this.stateData.maxHp * 0.03) / fps; 
-                    if (this.stateData.hp >= this.stateData.maxHp * 0.3) this.state = 'IDLE'; 
+                    // [수정] 잠을 잘 때 체력이 서서히 충전되며, 100%가 되어야만 깹니다.
+                    this.stateData.hp += this.stateData.maxHp / (fps * 10); // 약 10초에 걸쳐 풀충전
+                    if (this.stateData.hp >= this.stateData.maxHp) {
+                        this.stateData.hp = this.stateData.maxHp;
+                        this.state = 'IDLE'; 
+                    }
                     return; 
                 }
 
@@ -152,7 +161,6 @@
                 }
 
                 if (this.state === 'IDLE') {
-                    this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + (this.stateData.maxHp * 0.02) / fps);
                     this.wanderTimer--;
                     if (this.wanderTimer <= 0) {
                         this.wanderX = Math.random() * (canvas.width - 100) + 50;
@@ -164,12 +172,13 @@
                 if (this.state === 'WANDER') {
                     const dist = this.wanderX - this.x;
                     if (Math.abs(dist) < this.speedPerFrame) {
+                        this.x = this.wanderX;
                         this.state = 'IDLE';
                     } else {
                         this.direction = dist > 0 ? 1 : -1;
                         this.x += Math.sign(dist) * this.speedPerFrame;
-                        // [수정] 이동(WANDER) 시 1초에 스텟(speed) 수치만큼 체력을 1:1로 소모합니다.
-                        this.stateData.hp -= this.stateData.speed / fps; 
+                        // [수정] 이동한 포인트 수치만큼 체력을 1:1로 소모합니다.
+                        this.stateData.hp -= pointSpeedPerFrame; 
                     }
                 }
 
@@ -184,8 +193,8 @@
                         } else {
                             this.direction = dist > 0 ? 1 : -1;
                             this.x += Math.sign(dist) * this.speedPerFrame;
-                            // [수정] 먹이로 뛸 때(MOVE) 1초에 스텟(speed) 수치만큼 체력을 1:1로 소모합니다.
-                            this.stateData.hp -= this.stateData.speed / fps; 
+                            // [수정] 먹이로 뛸 때 이동한 포인트 수치만큼 체력을 1:1로 소모합니다.
+                            this.stateData.hp -= pointSpeedPerFrame; 
                         }
                     }
                 }
@@ -199,12 +208,9 @@
                         let eatAmt = Math.min(this.eatPerFrame, this.targetFood.pt);
                         this.targetFood.pt -= eatAmt;
                         
-                        // 섭취한 먹이의 영양분만큼 체력 및 경험치 회복
+                        // [수정] 먹이를 먹을 때 먹이 포인트(eatAmt)만큼 정확히 체력을 회복합니다.
                         this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + eatAmt);
                         this.stateData.exp += eatAmt;
-                        
-                        // [수정] 먹방 활동(EATING) 중에도 1초에 먹방력 스텟(eating) 수치만큼 체력을 1:1로 소모합니다.
-                        this.stateData.hp -= this.stateData.eating / fps; 
 
                         this.targetFood.w = Math.max(0, (this.targetFood.pt / this.targetFood.maxPt) * 100);
 
@@ -265,12 +271,10 @@
                     this.domElement.style.display = 'none';
                 }
 
-                // 100x50 UI 좌표 계산
                 const boxW = 100;
                 const startX = this.x - (boxW / 2);
                 const textY = this.y - 85; 
                 
-                // [수정] 이름표 뒤 반투명 검은 판(배경)을 삭제하고 텍스트에 그림자를 주어 가독성을 확보합니다.
                 ctx.save();
                 ctx.shadowColor = "rgba(0,0,0,0.9)";
                 ctx.shadowBlur = 3;
@@ -289,7 +293,6 @@
                 ctx.font = 'bold 10px "Courier New"';
                 ctx.fillText(`LV${this.stateData.level}`, startX + 5, barY + 5);
                 
-                // 바(Bar)에는 섀도우가 과하게 들어가지 않도록 해제
                 ctx.restore();
 
                 const barStartX = startX + 35;
@@ -297,7 +300,7 @@
                 
                 const reqExp = 100 + ((this.stateData.level - 1) * 200);
                 const expWidth = Math.min(barWidth, (this.stateData.exp / reqExp) * barWidth);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; // 배경이 없어졌으므로 게이지 바탕 투명도를 약간 높임
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; 
                 ctx.fillRect(barStartX, barY - 2, barWidth, 4);
                 ctx.fillStyle = '#00ffcc'; 
                 ctx.fillRect(barStartX, barY - 2, expWidth, 4);
@@ -308,15 +311,7 @@
                 ctx.fillStyle = '#ff0055'; 
                 ctx.fillRect(barStartX, barY + 5, hpWidth, 4);
 
-                if (this.state === 'SLEEPING') {
-                    ctx.save();
-                    ctx.shadowColor = "rgba(0,0,0,0.8)";
-                    ctx.shadowBlur = 2;
-                    ctx.fillStyle = '#aaaaff';
-                    ctx.font = 'bold 14px "Courier New"';
-                    ctx.fillText('Zzz..', this.x - 15, textY - 20);
-                    ctx.restore();
-                }
+                // [수정] 수면 시 스텟게이지 위의 Zzz.. 텍스트 표출 로직을 완전히 삭제했습니다.
             }
         }
 
@@ -413,8 +408,15 @@
         function processDonation(donationData) {
             const donorName = donationData.nickname || 'Unknown';
             const coin = donationData.coin_value || 0;
-            // [수정] 선물 썸네일 속성에 아바타 이미지가 덮어씌워진 경우를 대비해 프로필 원본 이미지가 될 확률이 높은 키워드들을 우선 검사합니다.
-            const thumbUrl = donationData.profile_img || donationData.user_thumb || donationData.avatar || donationData.thumb || null;
+            
+            // [수정] 선물 썸네일 속성에 아바타 이미지가 덮어씌워지는 것을 막기 위해, 경로 내에 gift, obj 등의 단어가 있으면 원천 무시합니다.
+            let safeThumb = donationData.profile_img || donationData.user_avatar || donationData.avatar_url || donationData.avatar || null;
+            if (!safeThumb && donationData.thumb) {
+                const tLow = donationData.thumb.toLowerCase();
+                if (!tLow.includes('gift') && !tLow.includes('obj') && !tLow.includes('prop')) {
+                    safeThumb = donationData.thumb;
+                }
+            }
 
             if (!userData.settings || !userData.settings.foodMappings) return; 
 
@@ -443,11 +445,14 @@
 
                 donorHistory[donorName] = { 
                     nickname: donorName,
-                    thumb: thumbUrl,
+                    thumb: safeThumb || null,
                     totalCoin: 0, 
                     catId: catId, 
                     stats: { name: customName, level: 1, exp: 0, speed: spd, eating: eat, maxHp: hp, hp: hp } 
                 };
+            } else if (safeThumb && !donorHistory[donorName].thumb) {
+                // 기존 유저인데 유효한 썸네일이 새롭게 감지되었다면 보완 등록
+                donorHistory[donorName].thumb = safeThumb;
             }
             
             donorHistory[donorName].totalCoin += coin;
