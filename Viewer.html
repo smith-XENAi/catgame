@@ -25,18 +25,26 @@
         
         let userData = { settings: null };
         let donorHistory = {};
+        let activeCats = [];
+        let foods = [];
+        let floatTexts = [];
 
-        // [수정] 이미지 리소스 서빙 포트(8001) 및 Ngrok 외부 접속 경로의 연동 분기점 수립
+        // Ngrok 외부 접속 경로 파싱
         const urlParams = new URLSearchParams(window.location.search);
         const ngrokWs = urlParams.get('ws');
-        let assetBaseUrl = "http://127.0.0.1:8001";
+        let assetBaseUrl = "http://localhost:8001";
+        
         if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
             let cleanNgrok = ngrokWs.replace(/\/+$/, "");
             assetBaseUrl = cleanNgrok.replace("wss://", "https://").replace("ws://", "http://");
+        } else {
+            // 로컬 테스트 Fallback
+            const wsPort = urlParams.get('port') || '8340';
+            assetBaseUrl = `http://127.0.0.1:${wsPort}`;
         }
 
-        const LOCAL_CAT_DB_URL = `${assetBaseUrl}/assets/d_catdesign/`;
-        const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/assets/d_fooddesign/`;
+        const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/d_catdesign/`;
+        const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/d_fooddesign/`;
 
         /* =========================================================================
            2. 캔버스 및 물리 엔진 초기화
@@ -72,7 +80,7 @@
         resize();
 
         /* =========================================================================
-           3. 원본 알고리즘 복구 (Cat, Food 클래스) + 랭킹 시스템 융합
+           3. 랭킹 시스템 및 인게임 오브젝트 복구
         ========================================================================= */
         class Cat {
             constructor(donorData, rank) {
@@ -81,20 +89,17 @@
                 this.rank = rank;
                 this.catId = donorData.catId;
                 
-                // 원본 stateData 복구 (스탯, 레벨업 관장)
                 this.stateData = donorData.stats; 
                 
-                // 밀어내기 등장 위치 설정 (화면 밖 우측)
                 this.x = window.innerWidth + 100;
                 this.y = canvas.height - 100;
-                this.state = 'ENTER'; // 기존 IDLE 대신 ENTER로 시작
-                this.direction = -1; // 왼쪽으로 뛰어들어옴
+                this.state = 'ENTER'; 
+                this.direction = -1; 
                 
                 this.targetFood = null;
                 this.wanderTimer = Math.random() * 3000 + 6000; 
                 this.wanderX = null;
 
-                // DOM 이미지 엘리먼트 생성 (원본)
                 this.domElement = document.createElement('img');
                 this.domElement.style.position = 'absolute';
                 this.domElement.style.pointerEvents = 'none';
@@ -119,7 +124,6 @@
                 this.speedPerFrame = this.stateData.speed / 60;
                 this.eatPerFrame = this.stateData.eating / 60;
 
-                // --- 1. 신규 랭킹 밀어내기 로직 (ENTER/EXIT) ---
                 if (this.state === 'ENTER') {
                     this.x -= Math.max(3, this.speedPerFrame * 2);
                     this.direction = -1;
@@ -136,7 +140,6 @@
                     return;
                 }
 
-                // --- 2. 원본 알고리즘 100% 복원 구간 시작 ---
                 if (this.stateData.hp <= 0) this.state = 'SLEEPING';
                 
                 if (this.state === 'SLEEPING') {
@@ -224,11 +227,9 @@
                         }
                     }
                 }
-                // --- 원본 알고리즘 복원 완료 ---
             }
 
             draw() {
-                // 디자인 DB 로컬 서버 경로 지정
                 const baseUrl = `${LOCAL_CAT_DB_URL}${this.catId}`;
                 const anims = {
                     IDLE: `${baseUrl}_idle.gif`,
@@ -254,7 +255,6 @@
                     this.domElement.style.display = 'none';
                 }
 
-                // 캔버스 UI 렌더링 (랭킹 + 이름 + 레벨 + 코인)
                 const titleText = `[${this.rank}위] LV${this.stateData.level}. ${this.stateData.name} (${this.donorName} / ${this.totalCoin}C)`;
                 ctx.font = 'bold 13px "Courier New"';
                 const textWidth = ctx.measureText(titleText).width;
@@ -300,7 +300,6 @@
 
         function spawnFood(mappingData, quantity = 1) {
             for(let i=0; i<quantity; i++) {
-                // 디자인 DB 로컬 서버 경로 지정
                 const imgUrl = `${LOCAL_FOOD_DB_URL}${mappingData.foodId}.png`;
 
                 let fData = {
@@ -374,14 +373,15 @@
            4. 후원 처리 및 밀어내기 랭킹 시스템 로직
         ========================================================================= */
         function processDonation(donorName, coin) {
+            if (!userData.settings || !userData.settings.foodMappings) return; // DB가 로드되지 않았을 경우 방어
+
             if (!donorHistory[donorName]) {
                 const fixed = (userData.settings.fixedDonors || []).find(d => d.nickname === donorName);
                 
-                // 신규 유저 스탯 생성 (원본 150pt 알고리즘 적용)
-                let remaining = 120; // 30 기본 보장 후 랜덤 120
+                let remaining = 120; 
                 let spd = 10 + Math.floor(Math.random() * 40); remaining -= spd;
                 let eat = 10 + Math.floor(Math.random() * 40); remaining -= eat;
-                let hp = 10 + (remaining * 2); // 체력 가중치
+                let hp = 10 + (remaining * 2); 
 
                 let catId = fixed ? fixed.catId : "calico"; 
                 let customName = fixed ? fixed.customName : donorName;
@@ -396,10 +396,9 @@
             
             donorHistory[donorName].totalCoin += coin;
 
-            // 먹이 투하 (맵핑 기준)
             for (let m of userData.settings.foodMappings) {
                 if (coin >= m.minCoin && coin <= m.maxCoin) {
-                    m.pt = m.pt || (coin * 10); // 기본 경험치 보정
+                    m.pt = m.pt || (coin * 10); 
                     spawnFood(m, 1);
                     break;
                 }
@@ -413,7 +412,6 @@
             const top3 = sortedDonors.slice(0, 3);
             const top3Nicknames = top3.map(d => d.nickname);
 
-            // 1위 ~ 3위 고양이 생성 및 업데이트
             top3.forEach((donor, index) => {
                 const rank = index + 1;
                 const existingCat = activeCats.find(c => c.donorName === donor.nickname && c.state !== 'EXIT');
@@ -421,38 +419,34 @@
                 if (existingCat) {
                     existingCat.updateData(donor.totalCoin, rank);
                 } else {
-                    activeCats.push(new Cat(donor, rank)); // 새로 뛰어들어옴
+                    activeCats.push(new Cat(donor, rank)); 
                 }
             });
 
-            // 3위 밖으로 밀려난 고양이 퇴장 처리
             activeCats.forEach(cat => {
                 if (!top3Nicknames.includes(cat.donorName) && cat.state !== 'EXIT') {
-                    cat.exit(); // 화면 밖으로 도망감
+                    cat.exit(); 
                 }
             });
         }
 
         /* =========================================================================
-           5. 코어 백엔드 웹소켓 통신 (목업 완전 제거)
+           5. 코어 백엔드 웹소켓 통신 (비밀번호 없는 읽기 전용 보안)
         ========================================================================= */
+        let ws = null;
         function initWebSocket() {
             if (ws) { ws.onclose = null; ws.close(); }
             const statusEl = document.getElementById('connection-status');
 
             try { 
-                // [수정] 보안 통신망 분리: 기본 포트를 8001로 맞추고 Ngrok 주소 존재 시 wss:// 기반의 /ws 엔드포인트로 치환
-                const urlParams = new URLSearchParams(window.location.search);
-                const ngrokWs = urlParams.get('ws');
-                const wsPort = urlParams.get('port') || '8001';
-                
-                let targetWsUrl = `ws://127.0.0.1:${wsPort}/ws`;
-                
+                let targetWsUrl = `ws://127.0.0.1:8340`;
                 if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
                     let cleanNgrok = ngrokWs.replace(/\/+$/, "");
-                    let wsBase = cleanNgrok.replace("https://", "wss://").replace("http://", "ws://");
-                    if (!wsBase.startsWith("ws")) wsBase = "wss://" + wsBase;
-                    targetWsUrl = `${wsBase}/ws`;
+                    targetWsUrl = cleanNgrok.replace("https://", "wss://").replace("http://", "ws://");
+                    if (!targetWsUrl.startsWith("ws")) targetWsUrl = "wss://" + targetWsUrl;
+                } else {
+                    const wsPort = urlParams.get('port') || '8340';
+                    targetWsUrl = `ws://127.0.0.1:${wsPort}`;
                 }
                 
                 ws = new WebSocket(targetWsUrl); 
@@ -461,8 +455,38 @@
             ws.onopen = () => {
                 statusEl.innerText = "🟢 시스템 연결 성공";
                 statusEl.style.color = "#00ff00";
+                
+                // [보안] 뷰어는 비밀번호 없이 현재 스트리머의 '설정 및 역사(History)'만 읽기 전용으로 요청합니다.
+                ws.send(JSON.stringify({ 
+                    action: "viewer_init", 
+                    payload: { streamer_id: currentUser } 
+                }));
             };
         
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.action === "viewer_init_res") {
+                    userData.settings = data.data.user_settings;
+                    
+                    if (!userData.settings || Object.keys(userData.settings).length === 0) {
+                        console.warn("스트리머 세팅이 없습니다. 기본 세팅을 적용합니다.");
+                        userData.settings = { foodMappings: [], fixedDonors: [] };
+                    }
+                    
+                    donorHistory = data.data.donor_history || {};
+                    // 저장된 기록이 있다면 화면에 복구
+                    if (Object.keys(donorHistory).length > 0) updateRankings();
+                }
+
+                // 라이브 도네이션 수신 시
+                if (data.action === "live_donation") {
+                    if (userData.settings) {
+                        processDonation(data.donor_nickname, data.coin_value);
+                    }
+                }
+            };
+
             ws.onclose = () => {
                 statusEl.innerText = "🔴 서버 연결 끊김 (재접속 대기)";
                 statusEl.style.color = "#ff0000";
@@ -473,8 +497,9 @@
                 console.error("연결 에러:", e);
             };
         }
-        // 페이지 로드 시 즉시 실행
+        
         initWebSocket();
+        requestAnimationFrame(renderEngine);
 
     </script>
 </body>
