@@ -24,6 +24,7 @@
         let currentUser = new URLSearchParams(window.location.search).get('user');
         
         let userData = { settings: null };
+        let masterDB = { cats: {}, foods: {} };
         let donorHistory = {};
         let activeCats = [];
         let foods = [];
@@ -32,19 +33,18 @@
         // Ngrok 외부 접속 경로 파싱
         const urlParams = new URLSearchParams(window.location.search);
         const ngrokWs = urlParams.get('ws');
-        let assetBaseUrl = "http://localhost:8001";
+        let assetBaseUrl = "http://127.0.0.1:8340"; // 지정된 포트 8340
         
         if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
             let cleanNgrok = ngrokWs.replace(/\/+$/, "");
             assetBaseUrl = cleanNgrok.replace("wss://", "https://").replace("ws://", "http://");
-        } else {
-            // 로컬 테스트 Fallback
-            const wsPort = urlParams.get('port') || '8340';
-            assetBaseUrl = `http://127.0.0.1:${wsPort}`;
         }
 
-        const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/d_catdesign/`;
-        const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/d_fooddesign/`;
+        const LOCAL_CAT_DB_URL = `${assetBaseUrl}/d_catdesign/`;
+        const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/d_fooddesign/`;
+
+        // 기본 3종 랜덤 풀 (하드코딩 - 마스터DB ID 기준)
+        const DEFAULT_CATS = ['cat1', 'cat2', 'cat3']; 
 
         /* =========================================================================
            2. 캔버스 및 물리 엔진 초기화
@@ -85,6 +85,7 @@
         class Cat {
             constructor(donorData, rank) {
                 this.donorName = donorData.nickname;
+                this.donorThumb = donorData.thumb || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNDQ0Ii8+PC9zdmc+'; // 기본 아바타
                 this.totalCoin = donorData.totalCoin;
                 this.rank = rank;
                 this.catId = donorData.catId;
@@ -109,6 +110,10 @@
                 this.domElement.style.display = 'none';
                 document.body.appendChild(this.domElement);
                 this.currentAnimSrc = null;
+
+                // 아바타 이미지 객체
+                this.avatarImg = new Image();
+                this.avatarImg.src = this.donorThumb;
             }
 
             updateData(totalCoin, rank) {
@@ -230,16 +235,19 @@
             }
 
             draw() {
-                const baseUrl = `${LOCAL_CAT_DB_URL}${this.catId}`;
-                const anims = {
-                    IDLE: `${baseUrl}_idle.gif`,
-                    MOVE: `${baseUrl}_move.gif`,
-                    EATING: `${baseUrl}_eat.gif`,
-                    SLEEPING: `${baseUrl}_sleep.gif`
-                };
-
-                let targetAnim = anims[this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' ? 'MOVE' : this.state];
-                if (!targetAnim && this.state !== 'SLEEPING') targetAnim = anims['IDLE'];
+                // 마스터 DB 구조 기반 파일 경로 유추
+                const catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
+                let targetAnim = null;
+                
+                if (catObj && catObj.filename) {
+                    const baseName = catObj.filename.replace('_idle', ''); // 블루_idle_s.gif -> 블루_s.gif 로직은 실제 DB 구축 방식에 따라 다름. 여기선 단순 교체
+                    const stateTag = this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' ? 'move' : 
+                                     this.state === 'EATING' ? 'eat' : 
+                                     this.state === 'SLEEPING' ? 'sleep' : 'idle';
+                    
+                    const newFileName = catObj.filename.replace('idle', stateTag);
+                    targetAnim = `${LOCAL_CAT_DB_URL}${catObj.folder}/${newFileName}`;
+                }
 
                 if (targetAnim) {
                     if (this.currentAnimSrc !== targetAnim) {
@@ -251,57 +259,72 @@
                     this.domElement.style.top = (this.y + (PIXEL_SIZE * 8)) + 'px';
                     this.domElement.style.width = '90px'; 
                     this.domElement.style.transform = `translate(-50%, -100%) scaleX(${this.direction})`;
-                } else {
-                    this.domElement.style.display = 'none';
                 }
 
-                const titleText = `[${this.rank}위] LV${this.stateData.level}. ${this.stateData.name} (${this.donorName} / ${this.totalCoin}C)`;
-                ctx.font = 'bold 13px "Courier New"';
-                const textWidth = ctx.measureText(titleText).width;
-                const barWidth = 60; 
-                
-                const uiMaxWidth = Math.max(textWidth, barWidth);
-                const startX = this.x - (uiMaxWidth / 2);
-                
+                // ==========================================
+                // 요구사항: 가로 100px, 세로 50px UI 박스 그리기
+                // ==========================================
+                const boxW = 100;
+                const boxH = 50;
+                const startX = this.x - (boxW / 2);
                 const textY = this.y - 85; 
-                const expGaugeY = textY + 10;
-                const hpGaugeY = expGaugeY + 8;
-
-                const textOffsetX = startX + (uiMaxWidth - textWidth) / 2;
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-                ctx.strokeText(titleText, textOffsetX, textY);
-                ctx.fillStyle = '#ffcc00';
-                ctx.fillText(titleText, textOffsetX, textY);
                 
-                const gaugeStartX = startX + (uiMaxWidth - barWidth) / 2;
+                // 반투명 배경 박스
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(startX, textY - 15, boxW, boxH);
+                ctx.strokeStyle = 'rgba(0, 204, 255, 0.5)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(startX, textY - 15, boxW, boxH);
+
+                // 1행: 아바타 이미지 + 닉네임 (6글자)
+                if (this.avatarImg) {
+                    ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
+                }
+                
+                let shortName = this.donorName.substring(0, 6);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 11px "Courier New"';
+                ctx.fillText(shortName, startX + 25, textY + 2);
+
+                // 2행: 레벨, 게이지
+                const barY = textY + 15;
+                ctx.fillStyle = '#ffcc00';
+                ctx.font = 'bold 10px "Courier New"';
+                ctx.fillText(`LV${this.stateData.level}`, startX + 5, barY + 5);
+
+                const barStartX = startX + 35;
+                const barWidth = 60;
                 
                 // EXP Bar
                 const reqExp = 100 + ((this.stateData.level - 1) * 200);
                 const expWidth = Math.min(barWidth, (this.stateData.exp / reqExp) * barWidth);
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                ctx.fillRect(gaugeStartX, expGaugeY, barWidth, 6);
-                ctx.fillStyle = '#ffcc00'; 
-                ctx.fillRect(gaugeStartX, expGaugeY, expWidth, 6);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.fillRect(barStartX, barY - 2, barWidth, 4);
+                ctx.fillStyle = '#00ffcc'; 
+                ctx.fillRect(barStartX, barY - 2, expWidth, 4);
 
                 // HP Bar
                 const hpWidth = Math.max(0, (this.stateData.hp / this.stateData.maxHp) * barWidth);
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                ctx.fillRect(gaugeStartX, hpGaugeY, barWidth, 6);
-                ctx.fillStyle = '#ff3333'; 
-                ctx.fillRect(gaugeStartX, hpGaugeY, hpWidth, 6);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.fillRect(barStartX, barY + 5, barWidth, 4);
+                ctx.fillStyle = '#ff0055'; 
+                ctx.fillRect(barStartX, barY + 5, hpWidth, 4);
 
-                if (this.state === 'SLEEPING' && !targetAnim) {
+                if (this.state === 'SLEEPING') {
                     ctx.fillStyle = '#aaaaff';
-                    ctx.fillText('Zzz..', this.x - 15, textY - 15);
+                    ctx.font = 'bold 14px "Courier New"';
+                    ctx.fillText('Zzz..', this.x - 15, textY - 20);
                 }
             }
         }
 
         function spawnFood(mappingData, quantity = 1) {
-            for(let i=0; i<quantity; i++) {
-                const imgUrl = `${LOCAL_FOOD_DB_URL}${mappingData.foodId}.png`;
+            const foodObj = masterDB.foods ? masterDB.foods[mappingData.foodId] : null;
+            if(!foodObj || !foodObj.filename) return;
 
+            const imgUrl = `${LOCAL_FOOD_DB_URL}${foodObj.folder}/${foodObj.filename}`;
+
+            for(let i=0; i<quantity; i++) {
                 let fData = {
                     mapId: mappingData.foodId,
                     pt: Number(mappingData.pt) || 10,
@@ -372,8 +395,12 @@
         /* =========================================================================
            4. 후원 처리 및 밀어내기 랭킹 시스템 로직
         ========================================================================= */
-        function processDonation(donorName, coin) {
-            if (!userData.settings || !userData.settings.foodMappings) return; // DB가 로드되지 않았을 경우 방어
+        function processDonation(donationData) {
+            const donorName = donationData.nickname || 'Unknown';
+            const coin = donationData.coin_value || 0;
+            const thumbUrl = donationData.thumb || null; // 유튜브 프로필 사진
+
+            if (!userData.settings || !userData.settings.foodMappings) return;
 
             if (!donorHistory[donorName]) {
                 const fixed = (userData.settings.fixedDonors || []).find(d => d.nickname === donorName);
@@ -383,11 +410,13 @@
                 let eat = 10 + Math.floor(Math.random() * 40); remaining -= eat;
                 let hp = 10 + (remaining * 2); 
 
-                let catId = fixed ? fixed.catId : "calico"; 
+                // 고정 고양이가 없으면 기본 3종 중 랜덤 배정
+                let catId = fixed ? fixed.catId : DEFAULT_CATS[Math.floor(Math.random() * DEFAULT_CATS.length)]; 
                 let customName = fixed ? fixed.customName : donorName;
 
                 donorHistory[donorName] = { 
-                    nickname: donorName, 
+                    nickname: donorName,
+                    thumb: thumbUrl,
                     totalCoin: 0, 
                     catId: catId, 
                     stats: { name: customName, level: 1, exp: 0, speed: spd, eating: eat, maxHp: hp, hp: hp } 
@@ -431,7 +460,7 @@
         }
 
         /* =========================================================================
-           5. 코어 백엔드 웹소켓 통신 (비밀번호 없는 읽기 전용 보안)
+           5. 코어 백엔드 웹소켓 통신 
         ========================================================================= */
         let ws = null;
         function initWebSocket() {
@@ -444,11 +473,7 @@
                     let cleanNgrok = ngrokWs.replace(/\/+$/, "");
                     targetWsUrl = cleanNgrok.replace("https://", "wss://").replace("http://", "ws://");
                     if (!targetWsUrl.startsWith("ws")) targetWsUrl = "wss://" + targetWsUrl;
-                } else {
-                    const wsPort = urlParams.get('port') || '8340';
-                    targetWsUrl = `ws://127.0.0.1:${wsPort}`;
                 }
-                
                 ws = new WebSocket(targetWsUrl); 
             } catch (e) { return; }
 
@@ -456,7 +481,6 @@
                 statusEl.innerText = "🟢 시스템 연결 성공";
                 statusEl.style.color = "#00ff00";
                 
-                // [보안] 뷰어는 비밀번호 없이 현재 스트리머의 '설정 및 역사(History)'만 읽기 전용으로 요청합니다.
                 ws.send(JSON.stringify({ 
                     action: "viewer_init", 
                     payload: { streamer_id: currentUser } 
@@ -467,22 +491,16 @@
                 const data = JSON.parse(event.data);
                 
                 if (data.action === "viewer_init_res") {
-                    userData.settings = data.data.user_settings;
-                    
-                    if (!userData.settings || Object.keys(userData.settings).length === 0) {
-                        console.warn("스트리머 세팅이 없습니다. 기본 세팅을 적용합니다.");
-                        userData.settings = { foodMappings: [], fixedDonors: [] };
-                    }
-                    
+                    userData.settings = data.data.user_settings || { foodMappings: [], fixedDonors: [] };
+                    masterDB = data.data.master_assets || { cats: {}, foods: {} };
                     donorHistory = data.data.donor_history || {};
-                    // 저장된 기록이 있다면 화면에 복구
+                    
                     if (Object.keys(donorHistory).length > 0) updateRankings();
                 }
 
-                // 라이브 도네이션 수신 시
                 if (data.action === "live_donation") {
                     if (userData.settings) {
-                        processDonation(data.donor_nickname, data.coin_value);
+                        processDonation(data); // 통째로 넘겨 thumb 처리
                     }
                 }
             };
@@ -491,10 +509,6 @@
                 statusEl.innerText = "🔴 서버 연결 끊김 (재접속 대기)";
                 statusEl.style.color = "#ff0000";
                 setTimeout(initWebSocket, 3000);
-            };
-            
-            ws.onerror = (e) => {
-                console.error("연결 에러:", e);
             };
         }
         
