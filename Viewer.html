@@ -213,7 +213,6 @@
                 }
             }
 
-           // [이렇게 교체해 주십시오]
             draw() {
                 // 마스터 DB 구조 기반 파일 경로 유추
                 let catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
@@ -230,9 +229,11 @@
                 let targetAnim = null;
                 
                 if (catObj && catObj.filename) {
-                    const baseName = catObj.filename.replace('_idle', ''); // 블루_idle_s.gif -> 블루_s.gif 로직은 실제 DB 구축 방식에 따라 다름. 여기선 단순 교체
+                    // [오류 수정] 렌더링 중단을 막기 위해 삭제되었던 상태 태그 연산 로직을 다시 복구했습니다.
+                    const stateTag = this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' ? 'move' : 
+                                     this.state === 'EATING' ? 'eat' : 
+                                     this.state === 'SLEEPING' ? 'sleep' : 'idle';
                     
-                    // 핵심 수정: 'idle' 텍스트만 상태값으로 정밀 치환 (예: 치즈_idle_s.gif -> 치즈_move_s.gif)
                     const newFileName = catObj.filename.replace('idle', stateTag);
                     targetAnim = `${LOCAL_CAT_DB_URL}${catObj.folder}/${newFileName}`;
                 }
@@ -379,7 +380,12 @@
         /* =========================================================================
            4. 후원 처리 및 랭킹 시스템
         ========================================================================= */
-        function processDonation(donorName, coin, thumbUrl) {
+        // [오류 수정] 파라미터를 객체 형태로 단일화하여 데이터 증발 오류를 잡았습니다.
+        function processDonation(donationData) {
+            const donorName = donationData.nickname || 'Unknown';
+            const coin = donationData.coin_value || 0;
+            const thumbUrl = donationData.thumb || null;
+
             if (!userData.settings || !userData.settings.foodMappings) return; 
 
             if (!donorHistory[donorName]) {
@@ -435,6 +441,7 @@
 
             updateRankings();
         }
+        
         function updateRankings() {
             const sortedDonors = Object.values(donorHistory).sort((a, b) => b.totalCoin - a.totalCoin);
             const top3 = sortedDonors.slice(0, 3);
@@ -509,7 +516,7 @@
                         if (target !== current && !target.includes(current) && !current.includes(target)) isMyChannel = false;
                     }
                     if (isMyChannel && userData.settings) {
-                        processDonation(data); // 통째로 넘겨 thumb 처리
+                        processDonation(data); // 통째로 넘겨 thumb 처리 (오류 완전 해결)
                     }
                 }
             };
