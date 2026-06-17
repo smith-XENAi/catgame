@@ -212,10 +212,8 @@
         function getAssetBaseUrl() {
             if (autoNgrokUrl && autoNgrokUrl !== "null" && autoNgrokUrl.trim() !== "") {
                 let cleanNgrok = autoNgrokUrl.replace(/\/+$/, "");
-                // Ngrok WSS 주소를 HTTPS로 변환하여 깃허브 외부망 연결 호환
                 return cleanNgrok.replace("wss://", "https://").replace("ws://", "http://");
             }
-            // 방화벽 및 이미지 에셋 서버는 8001이 아닌 8340에서 구동됨
             return "http://127.0.0.1:8340";
         }
 
@@ -378,7 +376,6 @@
                     parsedName = parsed.name;
                     isPaid = parsed.isPaid;
                     statStr = '스킨 액션 적용';
-                    // 경로에 /modules/m_begopanyang/image/ 추가
                     imgUrl = `${getAssetBaseUrl()}/modules/m_begopanyang/image/d_catdesign/${item.folder}/${item.filename}`;
                 } else {
                     if(!item.filename.includes('_m')) return;
@@ -386,7 +383,6 @@
                     parsedName = parsed.name;
                     isPaid = parsed.isPaid;
                     statStr = `경험치 부여: +${parsed.exp}`;
-                    // 경로에 /modules/m_begopanyang/image/ 추가
                     imgUrl = `${getAssetBaseUrl()}/modules/m_begopanyang/image/d_fooddesign/${item.folder}/${item.filename}`;
                 }
 
@@ -444,7 +440,6 @@
             else userPending.foods.push(assetId);
             
             if(ws && ws.readyState === WebSocket.OPEN) {
-                // 백엔드 구조에 맞춰 payload 구성
                 ws.send(JSON.stringify({ 
                     action: "save_user_data", 
                     payload: { 
@@ -453,7 +448,6 @@
                         settings: {
                             unlocked: userUnlocked,
                             pending: userPending
-                            // 나머지는 백엔드가 머지(Merge)한다고 가정하거나 기존 폼 데이터 다시 읽어와야 함
                         }
                     } 
                 }));
@@ -576,8 +570,9 @@
                 return showToast('코어 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
             }
 
-            const githubViewerBase = "https://smith-xenai.github.io/catgame/Viewer.html";
-            const urlObj = new URL(githubViewerBase);
+            // 웹 호스팅 주소 기준
+            const currentUrlBase = window.location.origin + window.location.pathname.replace('begopanyang.html', 'Viewer.html');
+            const urlObj = new URL(currentUrlBase);
             
             urlObj.searchParams.set('user', currentUser);
             
@@ -599,7 +594,6 @@
             showToast('OBS용 URL이 복사되었습니다.');
         }
         
-        // 비밀번호 수정 UI 제어 등 기존 함수들 유지 (분량 제약상 생략하지 않고 모두 포함)
         function togglePasswordArea() {
             const area = document.getElementById('password-change-area');
             if(area.style.display === 'none') {
