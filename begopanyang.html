@@ -195,7 +195,7 @@
         let autoNgrokUrl = ""; 
         let isNewStartMode = false;
         
-        let currentModalTarget = null;
+        let currentModalTarget = null; // 'cat' or 'food_mapRowId'
 
         window.onload = () => {
             const savedId = localStorage.getItem('bego_user_id');
@@ -218,7 +218,7 @@
         }
 
         // ============================================================================
-        // 2. 로그인 인증 및 통신 로직 (Ngrok 방어막 완벽 해제)
+        // 2. 로그인 인증 및 완벽한 Ngrok 방어막 돌파 로직
         // ============================================================================
         function doLogin(isReset) {
             const id = document.getElementById('streamer-id').value.trim();
@@ -237,10 +237,11 @@
             currentPw = pw;
             isNewStartMode = isReset;
 
+            // 비동기로 방어막을 부수고 통신을 연결합니다.
             initWebSocket(); 
         }
 
-        // [핵심 수정] async를 추가하여 fetch 우회가 완벽히 끝날 때까지 기다립니다.
+        // [핵심 해결] async를 추가하여 fetch 우회가 완벽히 끝날 때까지 기다립니다(await).
         async function initWebSocket() {
             if(ws) ws.close();
             
@@ -400,6 +401,7 @@
                     imgUrl = `${getAssetBaseUrl()}/modules/m_begopanyang/image/d_fooddesign/${item.folder}/${item.filename}`;
                 }
 
+                // 권한 체크
                 const isUnlocked = !isPaid || unlockedList.includes(item.id);
                 const isPending = pendingList.includes(item.id);
                 
@@ -583,6 +585,7 @@
                 return showToast('코어 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
             }
 
+            // 웹 호스팅 주소 기준
             const currentUrlBase = window.location.origin + window.location.pathname.replace('begopanyang.html', 'Viewer.html');
             const urlObj = new URL(currentUrlBase);
             
