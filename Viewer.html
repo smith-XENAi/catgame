@@ -6,23 +6,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>배고파냥 - 라이브 송출 뷰어</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
-        canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; position: relative; z-index: 60; pointer-events: none; }
-        #connection-status { 
-            position: absolute; top: 15px; right: 15px; z-index: 100;
-            width: 12px; height: 12px; border-radius: 50%;
-            background: #ffaa00; box-shadow: 0 0 10px #ffaa00;
-            transition: background 0.3s, box-shadow 0.3s;
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: transparent; 
+            overflow: hidden; 
+            font-family: 'Courier New', Courier, monospace; 
         }
-        #connection-status.connected { background: #00ff00; box-shadow: 0 0 10px #00ff00; }
-        #connection-status.disconnected { background: #ff0000; box-shadow: 0 0 10px #ff0000; }
+        canvas { 
+            display: block; 
+            width: 100%; 
+            height: 100%; 
+            image-rendering: pixelated; 
+            position: relative; 
+            z-index: 60; 
+            pointer-events: none; 
+        }
+        #connection-status { 
+            position: absolute; 
+            top: 15px; 
+            right: 15px; 
+            z-index: 100; 
+            width: 12px; 
+            height: 12px; 
+            border-radius: 50%; 
+            background: #ffaa00; 
+            box-shadow: 0 0 10px #ffaa00; 
+            transition: background 0.3s, box-shadow 0.3s; 
+        }
+        #connection-status.connected { 
+            background: #00ff00; 
+            box-shadow: 0 0 10px #00ff00; 
+        }
+        #connection-status.disconnected { 
+            background: #ff0000; 
+            box-shadow: 0 0 10px #ff0000; 
+        }
+        #error-overlay { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            background: rgba(15, 20, 30, 0.95); 
+            border: 2px solid #ff0055; 
+            border-radius: 12px; 
+            padding: 30px; 
+            text-align: center; 
+            color: white; 
+            z-index: 1000; 
+            box-shadow: 0 0 30px rgba(255, 0, 85, 0.5); 
+            display: none; 
+            font-family: 'Courier New', Courier, monospace; 
+            min-width: 400px; 
+        }
+        #error-overlay h2 { 
+            color: #ff0055; 
+            margin-top: 0; 
+            text-shadow: 0 0 5px #ff0055; 
+        }
+        #error-overlay p { 
+            font-size: 14px; 
+            color: #aaa; 
+            margin-bottom: 0; 
+            line-height: 1.5; 
+        }
     </style>
 </head>
 <body>
     <div id="connection-status" title="서버 연결 대기중..."></div>
+    <div id="error-overlay">
+        <h2>⚠️ 방송국 오프라인 상태</h2>
+        <p>스트리머의 서버(스타터)가 꺼져있거나 통신에 실패했습니다.<br>마스터 서버가 가동되면 <b>자동으로 연결됩니다.</b></p>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
 
     <script>
+        // ⚠️ 여기에 마스터의 실제 웹호스팅 도메인을 입력하세요!!
+        const MASTER_MATCHMAKER_URL = "https://마스터웹호스팅주소.com/matchmaker.php";
+
         const PIXEL_SIZE = 6;
         let currentUser = new URLSearchParams(window.location.search).get('user');
         
@@ -33,18 +97,10 @@
         let foods = [];
         let floatTexts = [];
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const tunnelWs = urlParams.get('ws');
-        
-        // 이미지 에셋 로드를 위한 Base URL 설정 로직 (Cloudflare 및 로컬 호환)
-        let assetBaseUrl = "http://127.0.0.1:8340"; 
-        if (tunnelWs && tunnelWs.trim() !== "") {
-            let cleanTunnel = tunnelWs.trim().replace(/\/+$/, "");
-            assetBaseUrl = cleanTunnel.replace("wss://", "https://").replace("ws://", "http://");
-        }
+        let assetBaseUrl = ""; 
+        let LOCAL_CAT_DB_URL = "";
+        let LOCAL_FOOD_DB_URL = "";
 
-        const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_catdesign/`;
-        const LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_fooddesign/`;
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -55,184 +111,202 @@
             const newW = window.innerWidth; 
             const newH = window.innerHeight; 
             
-            if (activeCats.length > 0) {
-                const wRatio = oldW ? (newW / oldW) : 1;
-                activeCats.forEach(c => { c.x *= wRatio; c.y = newH - 100; });
+            if (activeCats.length > 0) { 
+                const wRatio = oldW ? (newW / oldW) : 1; 
+                activeCats.forEach(c => { 
+                    c.x *= wRatio; 
+                    c.y = newH - 100; 
+                }); 
             }
-            if (foods.length > 0) {
-                const wRatio = oldW ? (newW / oldW) : 1;
-                foods.forEach(f => { f.x *= wRatio; if (f.isGrounded) f.y = newH - 100; });
+            
+            if (foods.length > 0) { 
+                const wRatio = oldW ? (newW / oldW) : 1; 
+                foods.forEach(f => { 
+                    f.x *= wRatio; 
+                    if (f.isGrounded) {
+                        f.y = newH - 100; 
+                    }
+                }); 
             }
-
+            
             canvas.width = newW; 
             canvas.height = newH; 
-            oldW = newW; oldH = newH;
+            oldW = newW; 
+            oldH = newH;
         }
-        window.addEventListener('resize', resize);
+        window.addEventListener('resize', resize); 
         resize();
 
         class Cat {
             constructor(donorData, rank) {
                 this.donorName = donorData.nickname;
                 const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2FhYSI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==';
-                
-                this.donorThumb = donorData.profile_thumb || defaultAvatar;
-                this.totalCoin = donorData.totalCoin;
-                this.rank = rank;
-                this.catId = donorData.catId;
+                this.donorThumb = donorData.profile_thumb || defaultAvatar; 
+                this.totalCoin = donorData.totalCoin; 
+                this.rank = rank; 
+                this.catId = donorData.catId; 
                 this.stateData = donorData.stats; 
                 
-                this.x = window.innerWidth + 100 + (rank * 120) + (Math.random() * 80);
-                this.y = canvas.height - 100;
+                this.x = window.innerWidth + 100 + (rank * 120) + (Math.random() * 80); 
+                this.y = canvas.height - 100; 
                 this.state = 'ENTER'; 
                 this.direction = -1; 
-                
-                this.targetFood = null;
+                this.targetFood = null; 
                 this.wanderTimer = Math.random() * 3000 + 6000; 
                 this.wanderX = null;
-
-                this.domElement = document.createElement('img');
-                this.domElement.style.position = 'absolute';
-                this.domElement.style.pointerEvents = 'none';
-                this.domElement.style.transform = 'translate(-50%, -100%)';
-                this.domElement.style.zIndex = '30';
+                
+                this.domElement = document.createElement('img'); 
+                this.domElement.style.position = 'absolute'; 
+                this.domElement.style.pointerEvents = 'none'; 
+                this.domElement.style.transform = 'translate(-50%, -100%)'; 
+                this.domElement.style.zIndex = '30'; 
                 this.domElement.style.imageRendering = 'pixelated'; 
                 this.domElement.style.display = 'none';
                 
-                this.domElement.onerror = () => { this.domElement.style.opacity = '0'; };
-                this.domElement.onload = () => { this.domElement.style.opacity = '1'; };
-                
+                this.domElement.onerror = () => { 
+                    this.domElement.style.opacity = '0'; 
+                }; 
+                this.domElement.onload = () => { 
+                    this.domElement.style.opacity = '1'; 
+                }; 
                 document.body.appendChild(this.domElement);
+                
                 this.currentAnimSrc = null;
-
-                this.avatarImg = new Image();
-                this.avatarImg.referrerPolicy = "no-referrer";
-                this.avatarImg.onerror = () => {
-                    this.avatarImg.src = defaultAvatar;
-                    this.avatarImg.onerror = null;
-                };
+                
+                this.avatarImg = new Image(); 
+                this.avatarImg.referrerPolicy = "no-referrer"; 
+                this.avatarImg.onerror = () => { 
+                    this.avatarImg.src = defaultAvatar; 
+                    this.avatarImg.onerror = null; 
+                }; 
                 this.avatarImg.src = this.donorThumb;
             }
 
-            updateData(totalCoin, rank) {
-                this.totalCoin = totalCoin;
-                this.rank = rank;
+            updateData(totalCoin, rank) { 
+                this.totalCoin = totalCoin; 
+                this.rank = rank; 
             }
 
-            exit() { this.state = 'EXIT'; }
+            exit() { 
+                this.state = 'EXIT'; 
+            }
 
             update() {
                 let fps = 60; 
                 let stageUnit = canvas.width / 100; 
-                
-                let pointSpeedPerFrame = (this.stateData.speed / 60) + (Math.random() * 0.02 - 0.01);
+                let pointSpeedPerFrame = (this.stateData.speed / 60) + (Math.random() * 0.02 - 0.01); 
                 let pointEatPerFrame = (this.stateData.eating / 60) + (Math.random() * 0.02 - 0.01);
-
+                
                 this.speedPerFrame = pointSpeedPerFrame * stageUnit; 
                 this.eatPerFrame = pointEatPerFrame; 
-
-                if (this.state === 'ENTER') {
-                    this.x -= Math.max(3, this.speedPerFrame * 1.5);
-                    this.direction = -1;
-                    if (this.x < window.innerWidth - 150) this.state = 'IDLE';
-                    return;
-                }
-                if (this.state === 'EXIT') {
-                    this.x += Math.max(4, this.speedPerFrame * 2);
-                    this.direction = 1;
-                    if (this.x > window.innerWidth + 150) {
-                        this.domElement.remove();
-                        activeCats = activeCats.filter(c => c !== this);
-                    }
-                    return;
-                }
-
-                if (this.stateData.hp <= 0) this.state = 'SLEEPING';
                 
-                if (this.state === 'SLEEPING') {
-                    this.stateData.hp += this.stateData.maxHp / (fps * 10); 
-                    if (this.stateData.hp >= this.stateData.maxHp) {
-                        this.stateData.hp = this.stateData.maxHp;
+                if (this.state === 'ENTER') { 
+                    this.x -= Math.max(3, this.speedPerFrame * 1.5); 
+                    this.direction = -1; 
+                    if (this.x < window.innerWidth - 150) {
                         this.state = 'IDLE'; 
                     }
                     return; 
                 }
-
+                
+                if (this.state === 'EXIT') { 
+                    this.x += Math.max(4, this.speedPerFrame * 2); 
+                    this.direction = 1; 
+                    if (this.x > window.innerWidth + 150) { 
+                        this.domElement.remove(); 
+                        activeCats = activeCats.filter(c => c !== this); 
+                    } 
+                    return; 
+                }
+                
+                if (this.stateData.hp <= 0) {
+                    this.state = 'SLEEPING';
+                }
+                
+                if (this.state === 'SLEEPING') { 
+                    this.stateData.hp += this.stateData.maxHp / (fps * 10); 
+                    if (this.stateData.hp >= this.stateData.maxHp) { 
+                        this.stateData.hp = this.stateData.maxHp; 
+                        this.state = 'IDLE'; 
+                    } 
+                    return; 
+                }
+                
                 let availableFoods = foods.filter(f => f.isGrounded);
-                if ((this.state === 'IDLE' || this.state === 'MOVE' || this.state === 'WANDER') && availableFoods.length > 0) {
-                    availableFoods.sort((a, b) => Math.abs(a.x - this.x) - Math.abs(b.x - this.x));
-                    this.targetFood = availableFoods[0];
-                    this.state = 'MOVE';
-                } else if (availableFoods.length === 0 && this.state === 'MOVE') {
-                    this.state = 'IDLE';
-                    this.targetFood = null;
+                if ((this.state === 'IDLE' || this.state === 'MOVE' || this.state === 'WANDER') && availableFoods.length > 0) { 
+                    availableFoods.sort((a, b) => Math.abs(a.x - this.x) - Math.abs(b.x - this.x)); 
+                    this.targetFood = availableFoods[0]; 
+                    this.state = 'MOVE'; 
+                } else if (availableFoods.length === 0 && this.state === 'MOVE') { 
+                    this.state = 'IDLE'; 
+                    this.targetFood = null; 
                 }
-
-                if (this.state === 'IDLE') {
-                    this.wanderTimer--;
-                    if (this.wanderTimer <= 0) {
-                        this.wanderX = Math.random() * (canvas.width - 100) + 50;
-                        this.state = 'WANDER';
+                
+                if (this.state === 'IDLE') { 
+                    this.wanderTimer--; 
+                    if (this.wanderTimer <= 0) { 
+                        this.wanderX = Math.random() * (canvas.width - 100) + 50; 
+                        this.state = 'WANDER'; 
                         this.wanderTimer = Math.random() * 3000 + 6000; 
-                    }
+                    } 
                 }
-
-                if (this.state === 'WANDER') {
-                    const dist = this.wanderX - this.x;
-                    if (Math.abs(dist) < this.speedPerFrame) {
-                        this.x = this.wanderX;
-                        this.state = 'IDLE';
-                    } else {
-                        this.direction = dist > 0 ? 1 : -1;
-                        this.x += Math.sign(dist) * this.speedPerFrame;
+                
+                if (this.state === 'WANDER') { 
+                    const dist = this.wanderX - this.x; 
+                    if (Math.abs(dist) < this.speedPerFrame) { 
+                        this.x = this.wanderX; 
+                        this.state = 'IDLE'; 
+                    } else { 
+                        this.direction = dist > 0 ? 1 : -1; 
+                        this.x += Math.sign(dist) * this.speedPerFrame; 
                         this.stateData.hp -= pointSpeedPerFrame; 
-                    }
+                    } 
                 }
-
-                if (this.state === 'MOVE' && this.targetFood) {
-                    if (!this.targetFood.isGrounded) {
-                        this.state = 'IDLE';
-                        this.targetFood = null;
-                    } else {
-                        const dist = this.targetFood.x - this.x;
-                        if (Math.abs(dist) < this.speedPerFrame) {
-                            this.state = 'EATING';
-                        } else {
-                            this.direction = dist > 0 ? 1 : -1;
-                            this.x += Math.sign(dist) * this.speedPerFrame;
+                
+                if (this.state === 'MOVE' && this.targetFood) { 
+                    if (!this.targetFood.isGrounded) { 
+                        this.state = 'IDLE'; 
+                        this.targetFood = null; 
+                    } else { 
+                        const dist = this.targetFood.x - this.x; 
+                        if (Math.abs(dist) < this.speedPerFrame) { 
+                            this.state = 'EATING'; 
+                        } else { 
+                            this.direction = dist > 0 ? 1 : -1; 
+                            this.x += Math.sign(dist) * this.speedPerFrame; 
                             this.stateData.hp -= pointSpeedPerFrame; 
-                        }
-                    }
+                        } 
+                    } 
                 }
-
+                
                 if (this.state === 'EATING' && this.targetFood) {
-                    if (this.targetFood.pt <= 0) {
-                        this.state = 'IDLE';
-                        this.targetFood = null;
-                        saveHistoryToServer();
+                    if (this.targetFood.pt <= 0) { 
+                        this.state = 'IDLE'; 
+                        this.targetFood = null; 
+                        saveHistoryToServer(); 
                     } else {
-                        let eatAmt = Math.min(this.eatPerFrame, this.targetFood.pt);
-                        this.targetFood.pt -= eatAmt;
-                        
-                        this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + eatAmt);
-                        this.stateData.exp += eatAmt;
-
+                        let eatAmt = Math.min(this.eatPerFrame, this.targetFood.pt); 
+                        this.targetFood.pt -= eatAmt; 
+                        this.stateData.hp = Math.min(this.stateData.maxHp, this.stateData.hp + eatAmt); 
+                        this.stateData.exp += eatAmt; 
                         this.targetFood.w = Math.max(0, (this.targetFood.pt / this.targetFood.maxPt) * 100);
-
+                        
                         const reqExp = 100 + ((this.stateData.level - 1) * 200);
                         if (this.stateData.exp >= reqExp) {
-                            this.stateData.level++;
+                            this.stateData.level++; 
                             this.stateData.exp -= reqExp;
-                            
-                            for(let i=0; i<20; i++) {
-                                let r = Math.floor(Math.random() * 3);
-                                if(r === 0) this.stateData.speed += 1;
-                                else if(r === 1) this.stateData.eating += 1;
-                                else this.stateData.maxHp += 1;
+                            for(let i=0; i<20; i++) { 
+                                let r = Math.floor(Math.random() * 3); 
+                                if(r === 0) {
+                                    this.stateData.speed += 1; 
+                                } else if(r === 1) {
+                                    this.stateData.eating += 1; 
+                                } else {
+                                    this.stateData.maxHp += 1; 
+                                }
                             }
                             this.stateData.hp = this.stateData.maxHp; 
-
-                            floatTexts.push({ text: "✨LEVEL UP!✨", x: this.x, y: this.y - 80, life: 100, color: '#00ffcc' });
+                            floatTexts.push({ text: "✨LEVEL UP!✨", x: this.x, y: this.y - 80, life: 100, color: '#00ffcc' }); 
                             saveHistoryToServer();
                         }
                     }
@@ -241,345 +315,376 @@
 
             draw() {
                 let catObj = masterDB.cats ? masterDB.cats[this.catId] : null;
-                
-                if (!catObj && masterDB.cats) {
-                    let fallbackCats = Object.keys(masterDB.cats).filter(k => masterDB.cats[k] && masterDB.cats[k].filename && masterDB.cats[k].filename.includes('idle'));
-                    if (fallbackCats.length > 0) {
-                        this.catId = fallbackCats[Math.floor(Math.random() * fallbackCats.length)];
-                        catObj = masterDB.cats[this.catId];
-                        if (donorHistory[this.donorName]) donorHistory[this.donorName].catId = this.catId;
-                    }
+                if (!catObj && masterDB.cats) { 
+                    let fallbackCats = Object.keys(masterDB.cats).filter(k => masterDB.cats[k] && masterDB.cats[k].filename && masterDB.cats[k].filename.includes('idle')); 
+                    if (fallbackCats.length > 0) { 
+                        this.catId = fallbackCats[Math.floor(Math.random() * fallbackCats.length)]; 
+                        catObj = masterDB.cats[this.catId]; 
+                        if (donorHistory[this.donorName]) {
+                            donorHistory[this.donorName].catId = this.catId; 
+                        }
+                    } 
                 }
-
+                
                 let targetAnim = null;
+                if (catObj && catObj.filename) { 
+                    const stateTag = (this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' || this.state === 'MOVE') ? 'move' : this.state === 'EATING' ? 'eat' : this.state === 'SLEEPING' ? 'sleep' : 'idle'; 
+                    const newFileName = catObj.filename.replace('idle', stateTag); 
+                    targetAnim = `${LOCAL_CAT_DB_URL}${catObj.folder}/${newFileName}`; 
+                }
                 
-                if (catObj && catObj.filename) {
-                    const stateTag = (this.state === 'WANDER' || this.state === 'ENTER' || this.state === 'EXIT' || this.state === 'MOVE') ? 'move' : 
-                                     this.state === 'EATING' ? 'eat' : 
-                                     this.state === 'SLEEPING' ? 'sleep' : 'idle';
-                    
-                    const newFileName = catObj.filename.replace('idle', stateTag);
-                    targetAnim = `${LOCAL_CAT_DB_URL}${catObj.folder}/${newFileName}`;
-                }
-
-                if (targetAnim) {
-                    if (this.currentAnimSrc !== targetAnim) {
-                        this.domElement.src = targetAnim;
-                        this.currentAnimSrc = targetAnim;
-                    }
-                    this.domElement.style.display = 'block';
-                    this.domElement.style.left = this.x + 'px';
-                    this.domElement.style.top = (this.y + (PIXEL_SIZE * 8)) + 'px';
+                if (targetAnim) { 
+                    if (this.currentAnimSrc !== targetAnim) { 
+                        this.domElement.src = targetAnim; 
+                        this.currentAnimSrc = targetAnim; 
+                    } 
+                    this.domElement.style.display = 'block'; 
+                    this.domElement.style.left = this.x + 'px'; 
+                    this.domElement.style.top = (this.y + (PIXEL_SIZE * 8)) + 'px'; 
                     this.domElement.style.width = '90px'; 
-                    this.domElement.style.transform = `translate(-50%, -100%) scaleX(${this.direction})`;
-                } else {
-                    this.domElement.style.display = 'none';
+                    this.domElement.style.transform = `translate(-50%, -100%) scaleX(${this.direction})`; 
+                } else { 
+                    this.domElement.style.display = 'none'; 
                 }
-
-                const boxW = 100;
-                const startX = this.x - (boxW / 2);
+                
+                const boxW = 100; 
+                const startX = this.x - (boxW / 2); 
                 const textY = this.y - 85; 
                 
-                ctx.save();
-                ctx.shadowColor = "rgba(0,0,0,0.9)";
-                ctx.shadowBlur = 3;
-                ctx.shadowOffsetX = 1;
+                ctx.save(); 
+                ctx.shadowColor = "rgba(0,0,0,0.9)"; 
+                ctx.shadowBlur = 3; 
+                ctx.shadowOffsetX = 1; 
                 ctx.shadowOffsetY = 1;
-
+                
                 if (this.avatarImg) {
                     ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
                 }
                 
-                const barY = textY + 15;
-                ctx.fillStyle = '#ffcc00';
-                ctx.font = 'bold 10px "Courier New"';
-                ctx.fillText(`LV${this.stateData.level}`, startX + 5, barY + 5);
-                
+                const barY = textY + 15; 
+                ctx.fillStyle = '#ffcc00'; 
+                ctx.font = 'bold 10px "Courier New"'; 
+                ctx.fillText(`LV${this.stateData.level}`, startX + 5, barY + 5); 
                 ctx.restore();
-
-                ctx.save();
-                ctx.font = 'bold 11px "Courier New"';
-                let displayName = this.donorName;
-                if (ctx.measureText(displayName).width > 100) {
-                    while (displayName.length > 0 && ctx.measureText(displayName + '...').width > 100) {
-                        displayName = displayName.slice(0, -1);
-                    }
-                    displayName += '...';
+                
+                ctx.save(); 
+                ctx.font = 'bold 11px "Courier New"'; 
+                let displayName = this.donorName; 
+                if (ctx.measureText(displayName).width > 100) { 
+                    while (displayName.length > 0 && ctx.measureText(displayName + '...').width > 100) { 
+                        displayName = displayName.slice(0, -1); 
+                    } 
+                    displayName += '...'; 
                 }
                 
-                ctx.strokeStyle = '#ffff00';
-                ctx.lineWidth = 3;
-                ctx.lineJoin = 'round';
-                ctx.strokeText(displayName, startX + 25, textY + 2);
-                
-                ctx.fillStyle = '#000000';
-                ctx.fillText(displayName, startX + 25, textY + 2);
+                ctx.strokeStyle = '#ffff00'; 
+                ctx.lineWidth = 3; 
+                ctx.lineJoin = 'round'; 
+                ctx.strokeText(displayName, startX + 25, textY + 2); 
+                ctx.fillStyle = '#000000'; 
+                ctx.fillText(displayName, startX + 25, textY + 2); 
                 ctx.restore();
-
-                const barStartX = startX + 35;
-                const barWidth = 60;
                 
-                const reqExp = 100 + ((this.stateData.level - 1) * 200);
+                const barStartX = startX + 35; 
+                const barWidth = 60; 
+                const reqExp = 100 + ((this.stateData.level - 1) * 200); 
                 const expWidth = Math.min(barWidth, (this.stateData.exp / reqExp) * barWidth);
+                
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; 
-                ctx.fillRect(barStartX, barY - 2, barWidth, 4);
+                ctx.fillRect(barStartX, barY - 2, barWidth, 4); 
                 ctx.fillStyle = '#3388ff'; 
                 ctx.fillRect(barStartX, barY - 2, expWidth, 4);
-
-                const hpWidth = Math.max(0, (this.stateData.hp / this.stateData.maxHp) * barWidth);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-                ctx.fillRect(barStartX, barY + 5, barWidth, 4);
+                
+                const hpWidth = Math.max(0, (this.stateData.hp / this.stateData.maxHp) * barWidth); 
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; 
+                ctx.fillRect(barStartX, barY + 5, barWidth, 4); 
                 ctx.fillStyle = '#ff0055'; 
                 ctx.fillRect(barStartX, barY + 5, hpWidth, 4);
             }
         }
 
         function spawnFood(mappingData, quantity = 1) {
-            const foodObj = masterDB.foods ? masterDB.foods[mappingData.foodId] : null;
-            if(!foodObj || !foodObj.filename) return;
-
+            const foodObj = masterDB.foods ? masterDB.foods[mappingData.foodId] : null; 
+            if(!foodObj || !foodObj.filename) {
+                return;
+            }
+            
             const imgUrl = `${LOCAL_FOOD_DB_URL}${foodObj.folder}/${foodObj.filename}`;
-
             for(let i=0; i<quantity; i++) {
-                let fData = {
-                    mapId: mappingData.foodId,
-                    pt: Number(foodObj.base_pt) || 10,
-                    maxPt: Number(foodObj.base_pt) || 10,
-                    x: Math.random() * (canvas.width - 100) + 50,
+                let fData = { 
+                    mapId: mappingData.foodId, 
+                    pt: Number(foodObj.base_pt) || 10, 
+                    maxPt: Number(foodObj.base_pt) || 10, 
+                    x: Math.random() * (canvas.width - 100) + 50, 
                     y: -100 - (i * 20), 
                     w: 100, 
-                    isGrounded: false,
-                    domElement: document.createElement('img')
+                    isGrounded: false, 
+                    domElement: document.createElement('img') 
                 };
-
-                fData.domElement.src = imgUrl;
-                fData.domElement.style.position = 'absolute';
-                fData.domElement.style.pointerEvents = 'none';
-                fData.domElement.style.zIndex = '50';
-                fData.domElement.style.imageRendering = 'pixelated';
-                fData.domElement.style.objectFit = 'contain';
+                
+                fData.domElement.src = imgUrl; 
+                fData.domElement.style.position = 'absolute'; 
+                fData.domElement.style.pointerEvents = 'none'; 
+                fData.domElement.style.zIndex = '50'; 
+                fData.domElement.style.imageRendering = 'pixelated'; 
+                fData.domElement.style.objectFit = 'contain'; 
                 fData.domElement.style.objectPosition = 'center bottom';
                 
-                fData.domElement.onerror = () => { fData.domElement.style.display = 'none'; };
-
-                document.body.appendChild(fData.domElement);
+                fData.domElement.onerror = () => { 
+                    fData.domElement.style.display = 'none'; 
+                }; 
+                
+                document.body.appendChild(fData.domElement); 
                 foods.push(fData);
             }
         }
 
         function renderEngine() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+            
             for (let i = foods.length - 1; i >= 0; i--) {
-                let f = foods[i];
+                let f = foods[i]; 
                 const targetY = canvas.height - 100; 
-                
-                if (f.y < targetY) {
+                if (f.y < targetY) { 
                     f.y += 6; 
-                } else {
-                    f.y = targetY;
+                } else { 
+                    f.y = targetY; 
                     f.isGrounded = true; 
                 }
                 
-                const drawX = f.x - 50;
-                const drawY = f.y - 50;
-                
-                f.domElement.style.left = drawX + 'px';
-                f.domElement.style.top = drawY + 'px';
-                f.domElement.style.width = '100px';
-                f.domElement.style.height = '100px';
+                const drawX = f.x - 50; 
+                const drawY = f.y - 50; 
+                f.domElement.style.left = drawX + 'px'; 
+                f.domElement.style.top = drawY + 'px'; 
+                f.domElement.style.width = '100px'; 
+                f.domElement.style.height = '100px'; 
                 f.domElement.style.clipPath = `inset(0 ${100 - f.w}% 0 0)`;
-
-                if (f.pt <= 0 || f.w <= 0) {
-                    if (f.domElement && f.domElement.parentNode) f.domElement.remove();
-                    foods.splice(i, 1);
+                
+                if (f.pt <= 0 || f.w <= 0) { 
+                    if (f.domElement && f.domElement.parentNode) {
+                        f.domElement.remove(); 
+                    }
+                    foods.splice(i, 1); 
                 }
             }
-
-            activeCats.forEach(c => { c.update(); c.draw(); });
-
-            for (let i = floatTexts.length - 1; i >= 0; i--) {
-                let ft = floatTexts[i];
-                ctx.fillStyle = ft.color;
-                ctx.font = 'bold 20px "Courier New"';
-                ctx.fillText(ft.text, ft.x, ft.y);
-                ft.y -= 1.5;
-                ft.life--;
-                if (ft.life <= 0) floatTexts.splice(i, 1);
+            
+            activeCats.forEach(c => { 
+                c.update(); 
+                c.draw(); 
+            });
+            
+            for (let i = floatTexts.length - 1; i >= 0; i--) { 
+                let ft = floatTexts[i]; 
+                ctx.fillStyle = ft.color; 
+                ctx.font = 'bold 20px "Courier New"'; 
+                ctx.fillText(ft.text, ft.x, ft.y); 
+                ft.y -= 1.5; 
+                ft.life--; 
+                if (ft.life <= 0) {
+                    floatTexts.splice(i, 1); 
+                }
             }
-
+            
             requestAnimationFrame(renderEngine);
         }
 
         function saveHistoryToServer() {
-            if (ws && ws.readyState === WebSocket.OPEN && currentUser) {
+            if (ws && ws.readyState === WebSocket.OPEN && currentUser) { 
                 ws.send(JSON.stringify({ 
                     action: "save_user_data", 
                     payload: { 
                         streamer_id: currentUser, 
-                        settings: userData.settings,
-                        history: donorHistory
+                        settings: userData.settings, 
+                        history: donorHistory 
                     } 
-                }));
+                })); 
             }
         }
 
         function processProfileUpdate(data) {
-            const donorName = data.nickname || data.donor_nickname || 'Unknown';
-            const profileThumb = data.profile_thumb || null;
+            const donorName = data.nickname || data.donor_nickname || 'Unknown'; 
+            const profileThumb = data.profile_thumb || null; 
+            if (!profileThumb || !userData.settings) {
+                return;
+            }
             
-            if (!profileThumb || !userData.settings) return;
-
-            if (donorHistory[donorName]) {
-                if (!donorHistory[donorName].profile_thumb) {
-                    donorHistory[donorName].profile_thumb = profileThumb;
-                    const activeCat = activeCats.find(c => c.donorName === donorName);
-                    if (activeCat && activeCat.avatarImg) activeCat.avatarImg.src = profileThumb;
-                    saveHistoryToServer();
-                }
-            } else {
-                donorHistory[donorName] = {
-                    nickname: donorName,
-                    profile_thumb: profileThumb,
-                    best_gift_thumb: null,
-                    max_single_coin: 0,
-                    totalCoin: 0
-                };
-                saveHistoryToServer();
+            if (donorHistory[donorName]) { 
+                if (!donorHistory[donorName].profile_thumb) { 
+                    donorHistory[donorName].profile_thumb = profileThumb; 
+                    const activeCat = activeCats.find(c => c.donorName === donorName); 
+                    if (activeCat && activeCat.avatarImg) {
+                        activeCat.avatarImg.src = profileThumb; 
+                    }
+                    saveHistoryToServer(); 
+                } 
+            } else { 
+                donorHistory[donorName] = { 
+                    nickname: donorName, 
+                    profile_thumb: profileThumb, 
+                    best_gift_thumb: null, 
+                    max_single_coin: 0, 
+                    totalCoin: 0 
+                }; 
+                saveHistoryToServer(); 
             }
         }
 
         function processDonation(donationData) {
-            const donorName = donationData.nickname || donationData.donor_nickname || 'Unknown';
-            const coin = donationData.coin_value || 0;
-            
-            const profileThumb = donationData.profile_thumb || null;
+            const donorName = donationData.nickname || donationData.donor_nickname || 'Unknown'; 
+            const coin = donationData.coin_value || 0; 
+            const profileThumb = donationData.profile_thumb || null; 
             const giftThumb = donationData.gift_thumb || null;
-
-            if (!userData.settings || !userData.settings.foodMappings) return; 
-
+            
+            if (!userData.settings || !userData.settings.foodMappings) {
+                return; 
+            }
+            
             if (!donorHistory[donorName] || !donorHistory[donorName].stats) {
                 const fixed = (userData.settings.fixedDonors || []).find(d => d.nickname === donorName);
-                
                 let remaining = 120; 
-                let spd = 10 + Math.floor(Math.random() * 40); remaining -= spd;
-                let eat = 10 + Math.floor(Math.random() * 40); remaining -= eat;
+                let spd = 10 + Math.floor(Math.random() * 40); 
+                remaining -= spd; 
+                let eat = 10 + Math.floor(Math.random() * 40); 
+                remaining -= eat; 
                 let hp = 10 + (remaining * 2); 
-
-                let availableCats = [];
-                if (masterDB.cats) {
-                    availableCats = Object.keys(masterDB.cats).filter(k => {
-                        let cat = masterDB.cats[k];
-                        if (!cat.filename || !cat.filename.includes('idle')) return false;
-                        if (!cat.filename.includes('_s')) return true;
-                        let unlocked = userData.settings.unlocked && userData.settings.unlocked.cats ? userData.settings.unlocked.cats : [];
-                        return unlocked.includes(cat.id);
-                    });
-                }
-                let randomCatId = availableCats.length > 0 ? availableCats[Math.floor(Math.random() * availableCats.length)] : null;
                 
+                let availableCats = []; 
+                if (masterDB.cats) { 
+                    availableCats = Object.keys(masterDB.cats).filter(k => { 
+                        let cat = masterDB.cats[k]; 
+                        if (!cat.filename || !cat.filename.includes('idle')) return false; 
+                        if (!cat.filename.includes('_s')) return true; 
+                        let unlocked = userData.settings.unlocked && userData.settings.unlocked.cats ? userData.settings.unlocked.cats : []; 
+                        return unlocked.includes(cat.id); 
+                    }); 
+                }
+                
+                let randomCatId = availableCats.length > 0 ? availableCats[Math.floor(Math.random() * availableCats.length)] : null;
                 let catId = fixed ? fixed.catId : randomCatId; 
                 let customName = fixed ? fixed.customName : donorName;
-
+                
                 donorHistory[donorName] = { 
-                    nickname: donorName,
-                    profile_thumb: profileThumb,
-                    best_gift_thumb: giftThumb,
-                    max_single_coin: coin,
+                    nickname: donorName, 
+                    profile_thumb: profileThumb, 
+                    best_gift_thumb: giftThumb, 
+                    max_single_coin: coin, 
                     totalCoin: 0, 
                     catId: catId, 
-                    stats: { name: customName, level: 1, exp: 0, speed: spd, eating: eat, maxHp: hp, hp: hp } 
+                    stats: { 
+                        name: customName, 
+                        level: 1, 
+                        exp: 0, 
+                        speed: spd, 
+                        eating: eat, 
+                        maxHp: hp, 
+                        hp: hp 
+                    } 
                 };
-            } else {
-                if (profileThumb && !donorHistory[donorName].profile_thumb) {
-                    donorHistory[donorName].profile_thumb = profileThumb;
-                    const activeCat = activeCats.find(c => c.donorName === donorName);
-                    if (activeCat && activeCat.avatarImg) activeCat.avatarImg.src = profileThumb;
-                }
+            } else { 
+                if (profileThumb && !donorHistory[donorName].profile_thumb) { 
+                    donorHistory[donorName].profile_thumb = profileThumb; 
+                    const activeCat = activeCats.find(c => c.donorName === donorName); 
+                    if (activeCat && activeCat.avatarImg) {
+                        activeCat.avatarImg.src = profileThumb; 
+                    }
+                } 
             }
-
-            if (coin > 0 && coin >= (donorHistory[donorName].max_single_coin || 0)) {
-                donorHistory[donorName].max_single_coin = coin;
-                if (giftThumb) donorHistory[donorName].best_gift_thumb = giftThumb;
+            
+            if (coin > 0 && coin >= (donorHistory[donorName].max_single_coin || 0)) { 
+                donorHistory[donorName].max_single_coin = coin; 
+                if (giftThumb) {
+                    donorHistory[donorName].best_gift_thumb = giftThumb; 
+                }
             }
             
             donorHistory[donorName].totalCoin += coin;
-
-            let spawned = false;
-            for (let m of userData.settings.foodMappings) {
-                if (coin >= m.minCoin && coin <= m.maxCoin) {
+            let spawned = false; 
+            
+            for (let m of userData.settings.foodMappings) { 
+                if (coin >= m.minCoin && coin <= m.maxCoin) { 
                     m.pt = m.pt || (coin * 10); 
-                    spawnFood(m, 1);
-                    spawned = true;
-                    break;
-                }
+                    spawnFood(m, 1); 
+                    spawned = true; 
+                    break; 
+                } 
             }
             
-            if (!spawned && userData.settings.foodMappings.length > 0) {
-                let defaultMap = userData.settings.foodMappings[0];
-                defaultMap.pt = defaultMap.pt || 10;
-                spawnFood(defaultMap, 1);
+            if (!spawned && userData.settings.foodMappings.length > 0) { 
+                let defaultMap = userData.settings.foodMappings[0]; 
+                defaultMap.pt = defaultMap.pt || 10; 
+                spawnFood(defaultMap, 1); 
             }
-
-            updateRankings();
+            
+            updateRankings(); 
             saveHistoryToServer();
         }
         
         function updateRankings() {
-            const sortedDonors = Object.values(donorHistory)
-                .filter(d => d.stats) 
-                .sort((a, b) => b.totalCoin - a.totalCoin);
-            const top3 = sortedDonors.slice(0, 3);
+            const sortedDonors = Object.values(donorHistory).filter(d => d.stats).sort((a, b) => b.totalCoin - a.totalCoin);
+            const top3 = sortedDonors.slice(0, 3); 
             const top3Nicknames = top3.map(d => d.nickname);
-
-            top3.forEach((donor, index) => {
-                const rank = index + 1;
-                const existingCat = activeCats.find(c => c.donorName === donor.nickname && c.state !== 'EXIT');
-                
-                if (existingCat) {
-                    existingCat.updateData(donor.totalCoin, rank);
-                } else {
+            
+            top3.forEach((donor, index) => { 
+                const rank = index + 1; 
+                const existingCat = activeCats.find(c => c.donorName === donor.nickname && c.state !== 'EXIT'); 
+                if (existingCat) { 
+                    existingCat.updateData(donor.totalCoin, rank); 
+                } else { 
                     activeCats.push(new Cat(donor, rank)); 
-                }
+                } 
             });
-
-            activeCats.forEach(cat => {
-                if (!top3Nicknames.includes(cat.donorName) && cat.state !== 'EXIT') {
+            
+            activeCats.forEach(cat => { 
+                if (!top3Nicknames.includes(cat.donorName) && cat.state !== 'EXIT') { 
                     cat.exit(); 
-                }
+                } 
             });
         }
 
         let ws = null;
-        function initWebSocket() {
-            if (ws) { ws.onclose = null; ws.close(); }
-            const statusEl = document.getElementById('connection-status');
-            
-            statusEl.className = '';
-            statusEl.title = "서버 연결 시도 중...";
 
-            try { 
-                // [웹소켓 로직 보강] Cloudflare 주소를 절대적으로 완벽하게 파싱합니다.
-                let targetWsUrl = "ws://127.0.0.1:8340";
-                
-                if (tunnelWs && tunnelWs.trim() !== "") {
-                    let cleanUrl = tunnelWs.trim().replace(/\/+$/, "");
-                    targetWsUrl = cleanUrl.replace("https://", "wss://").replace("http://", "ws://");
-                    if (!targetWsUrl.startsWith("ws")) {
-                        targetWsUrl = "wss://" + targetWsUrl.replace("https://", "");
-                    }
-                } else {
-                    const currentHost = window.location.hostname || "127.0.0.1";
-                    targetWsUrl = `ws://${currentHost}:8340`;
+        async function initWebSocket() {
+            if (ws) { 
+                ws.onclose = null; 
+                ws.close(); 
+            }
+            
+            const statusEl = document.getElementById('connection-status');
+            statusEl.className = ''; 
+            statusEl.title = "서버 연결 시도 중...";
+            
+            if (!currentUser) {
+                return;
+            }
+
+            try {
+                // 매치메이커에서 마스터 서버 주소 가져오기
+                const res = await fetch(MASTER_MATCHMAKER_URL);
+                const tunnelUrl = await res.text();
+
+                if (tunnelUrl === "NONE" || tunnelUrl.includes("Error") || tunnelUrl.trim() === "") {
+                    document.getElementById('error-overlay').style.display = 'block';
+                    setTimeout(initWebSocket, 5000); 
+                    return;
                 }
-                
+
+                assetBaseUrl = tunnelUrl.trim();
+                LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_catdesign/`;
+                LOCAL_FOOD_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_fooddesign/`;
+
+                let targetWsUrl = assetBaseUrl.replace("https://", "wss://");
                 ws = new WebSocket(targetWsUrl); 
-            } catch (e) { return; }
+
+            } catch (e) { 
+                document.getElementById('error-overlay').style.display = 'block';
+                setTimeout(initWebSocket, 5000);
+                return; 
+            }
 
             ws.onopen = () => {
-                statusEl.className = 'connected';
+                statusEl.className = 'connected'; 
                 statusEl.title = "서버 연결 성공";
-                
+                document.getElementById('error-overlay').style.display = 'none';
                 ws.send(JSON.stringify({ 
                     action: "viewer_init", 
                     payload: { streamer_id: currentUser } 
@@ -589,33 +694,39 @@
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 
-                if (data.action === "viewer_init_res") {
-                    userData.settings = data.data.user_settings || { foodMappings: [], fixedDonors: [] };
-                    masterDB = data.data.master_assets || { cats: {}, foods: {} };
-                    donorHistory = data.data.donor_history || {};
+                if (data.action === "viewer_init_res") { 
+                    userData.settings = data.data.user_settings || { foodMappings: [], fixedDonors: [] }; 
+                    masterDB = data.data.master_assets || { cats: {}, foods: {} }; 
+                    donorHistory = data.data.donor_history || {}; 
                     
-                    if (Object.keys(donorHistory).length > 0) updateRankings();
-                }
-
-                if (data.action === "chat_profile_update") {
-                    let isMyChannel = true;
-                    if (data.target_broadcaster && currentUser) {
-                        const target = String(data.target_broadcaster).toLowerCase();
-                        const current = String(currentUser).toLowerCase().replace('@', '');
-                        if (target !== current && !target.includes(current) && !current.includes(target)) isMyChannel = false;
+                    if (Object.keys(donorHistory).length > 0) {
+                        updateRankings(); 
                     }
+                }
+                
+                if (data.action === "chat_profile_update") { 
+                    let isMyChannel = true; 
+                    if (data.target_broadcaster && currentUser) { 
+                        const target = String(data.target_broadcaster).toLowerCase(); 
+                        const current = String(currentUser).toLowerCase().replace('@', ''); 
+                        if (target !== current && !target.includes(current) && !current.includes(target)) {
+                            isMyChannel = false; 
+                        }
+                    } 
                     if (isMyChannel) {
-                        processProfileUpdate(data);
+                        processProfileUpdate(data); 
                     }
                 }
-
-                if (data.action === "live_donation") {
-                    let isMyChannel = true;
-                    if (data.target_broadcaster && currentUser) {
-                        const target = String(data.target_broadcaster).toLowerCase();
-                        const current = String(currentUser).toLowerCase().replace('@', '');
-                        if (target !== current && !target.includes(current) && !current.includes(target)) isMyChannel = false;
-                    }
+                
+                if (data.action === "live_donation") { 
+                    let isMyChannel = true; 
+                    if (data.target_broadcaster && currentUser) { 
+                        const target = String(data.target_broadcaster).toLowerCase(); 
+                        const current = String(currentUser).toLowerCase().replace('@', ''); 
+                        if (target !== current && !target.includes(current) && !current.includes(target)) {
+                            isMyChannel = false; 
+                        }
+                    } 
                     if (isMyChannel && userData.settings) {
                         processDonation(data); 
                     }
@@ -623,8 +734,9 @@
             };
 
             ws.onclose = () => {
-                statusEl.className = 'disconnected';
+                statusEl.className = 'disconnected'; 
                 statusEl.title = "서버 연결 끊김";
+                document.getElementById('error-overlay').style.display = 'block';
                 setTimeout(initWebSocket, 3000);
             };
         }
