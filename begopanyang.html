@@ -195,7 +195,7 @@
         let autoNgrokUrl = ""; 
         let isNewStartMode = false;
         
-        let currentModalTarget = null; // 'cat' or 'food_mapRowId'
+        let currentModalTarget = null;
 
         window.onload = () => {
             const savedId = localStorage.getItem('bego_user_id');
@@ -218,7 +218,7 @@
         }
 
         // ============================================================================
-        // 2. 로그인 인증 및 통신 로직
+        // 2. 로그인 인증 및 통신 로직 (Ngrok 방어막 완벽 해제)
         // ============================================================================
         function doLogin(isReset) {
             const id = document.getElementById('streamer-id').value.trim();
@@ -240,7 +240,8 @@
             initWebSocket(); 
         }
 
-        function initWebSocket() {
+        // [핵심 수정] async를 추가하여 fetch 우회가 완벽히 끝날 때까지 기다립니다.
+        async function initWebSocket() {
             if(ws) ws.close();
             
             const urlParams = new URLSearchParams(window.location.search);
@@ -254,10 +255,23 @@
                 if (!targetWsUrl.startsWith("ws")) targetWsUrl = "wss://" + targetWsUrl;
             }
 
+            // [오류 해결] await fetch를 통해 Ngrok 보안 창을 조용히 박살 낸 후 통신을 이어갑니다.
+            if (targetWsUrl.includes("ngrok")) {
+                const httpUrl = targetWsUrl.replace("wss://", "https://").replace("ws://", "http://");
+                try {
+                    await fetch(httpUrl, { 
+                        method: 'GET',
+                        headers: { 'ngrok-skip-browser-warning': 'true' } 
+                    });
+                } catch(e) {
+                    console.log("Ngrok bypass initialized");
+                }
+            }
+
             try {
                 ws = new WebSocket(targetWsUrl);
             } catch(e) {
-                showToast("마스터 서버와의 통신에 실패했습니다. 링크를 확인하세요.", true);
+                showToast("통신 서버와 연결할 수 없습니다. URL 파라미터를 확인하세요.", true);
                 return;
             }
 
@@ -327,7 +341,7 @@
         }
 
         // ============================================================================
-        // 3. UI 렌더링 및 모달/선택기 제어 (파일명 파싱 포함)
+        // 3. UI 렌더링 및 모달/선택기 제어 
         // ============================================================================
         function parseCatFilename(filename) {
             const parts = filename.split('_');
@@ -386,7 +400,6 @@
                     imgUrl = `${getAssetBaseUrl()}/modules/m_begopanyang/image/d_fooddesign/${item.folder}/${item.filename}`;
                 }
 
-                // 권한 체크
                 const isUnlocked = !isPaid || unlockedList.includes(item.id);
                 const isPending = pendingList.includes(item.id);
                 
@@ -570,7 +583,6 @@
                 return showToast('코어 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
             }
 
-            // 웹 호스팅 주소 기준
             const currentUrlBase = window.location.origin + window.location.pathname.replace('begopanyang.html', 'Viewer.html');
             const urlObj = new URL(currentUrlBase);
             
