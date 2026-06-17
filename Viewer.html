@@ -125,7 +125,7 @@
                 let fps = 60; 
                 let stageUnit = canvas.width / 100; 
                 
-                let pointSpeedPerFrame = (this.stateData.speed / 60) + (Math.random() * 0.02 - 0.01);
+                let pointSpeedPerFrame = (this.stateData.speed / 180) + (Math.random() * 0.02 - 0.01);
                 let pointEatPerFrame = (this.stateData.eating / 60) + (Math.random() * 0.02 - 0.01);
 
                 this.speedPerFrame = pointSpeedPerFrame * stageUnit; 
