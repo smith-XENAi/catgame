@@ -97,6 +97,7 @@
                 <b style="color:#ffcc00;">최초 접속 시 입력한 비밀번호로 계정이 즉시 귀속(생성)되며</b>,<br>
                 이후부터는 해당 비밀번호를 알아야만 설정을 열람하고 수정할 수 있습니다.
             </p>
+            <!-- 서버 주소 입력칸을 완전히 삭제하여 깔끔한 원상 복구 -->
             <input type="text" id="streamer-id" placeholder="스트리머 ID (예: @user123)">
             <br>
             <input type="password" id="streamer-pw" placeholder="계정 비밀번호 (최초 접속 시 자동 설정됨)">
@@ -218,7 +219,7 @@
         }
 
         // ============================================================================
-        // 2. 로그인 인증 및 완벽한 Ngrok 방어막 돌파 로직
+        // 2. 로그인 인증 및 통신 로직 (Ngrok 완벽 우회 포함)
         // ============================================================================
         function doLogin(isReset) {
             const id = document.getElementById('streamer-id').value.trim();
@@ -237,11 +238,11 @@
             currentPw = pw;
             isNewStartMode = isReset;
 
-            // 비동기로 방어막을 부수고 통신을 연결합니다.
+            // [수정] 비동기(async/await) 로직을 처리하기 위해 프로미스 호출
             initWebSocket(); 
         }
 
-        // [핵심 해결] async를 추가하여 fetch 우회가 완벽히 끝날 때까지 기다립니다(await).
+        // [완벽 복구] async 함수로 선언하여 Ngrok 우회가 끝날 때까지 '기다림(await)'을 강제합니다.
         async function initWebSocket() {
             if(ws) ws.close();
             
@@ -250,16 +251,18 @@
             
             if (!targetWsUrl) {
                 const wsPort = urlParams.get('port') || '8340';
-                targetWsUrl = `ws://127.0.0.1:${wsPort}`;
+                const currentHost = window.location.hostname || "127.0.0.1";
+                targetWsUrl = `ws://${currentHost}:${wsPort}`;
             } else {
                 targetWsUrl = targetWsUrl.replace("https://", "wss://").replace("http://", "ws://");
                 if (!targetWsUrl.startsWith("ws")) targetWsUrl = "wss://" + targetWsUrl;
             }
 
-            // [오류 해결] await fetch를 통해 Ngrok 보안 창을 조용히 박살 낸 후 통신을 이어갑니다.
+            // [핵심] Ngrok 경고창을 백그라운드에서 완전히 우회 (await 추가로 완벽 대기)
             if (targetWsUrl.includes("ngrok")) {
                 const httpUrl = targetWsUrl.replace("wss://", "https://").replace("ws://", "http://");
                 try {
+                    // await가 없으면 연결 전에 소켓이 붙어버려 튕깁니다. 반드시 기다려야 합니다.
                     await fetch(httpUrl, { 
                         method: 'GET',
                         headers: { 'ngrok-skip-browser-warning': 'true' } 
@@ -272,7 +275,7 @@
             try {
                 ws = new WebSocket(targetWsUrl);
             } catch(e) {
-                showToast("통신 서버와 연결할 수 없습니다. URL 파라미터를 확인하세요.", true);
+                showToast("마스터 서버와의 통신에 실패했습니다. 링크를 확인하세요.", true);
                 return;
             }
 
@@ -551,7 +554,7 @@
         }
 
         // ============================================================================
-        // 4. 저장 및 URL 발급
+        // 4. 저장 및 URL 발급 (서버 주소 동적 맵핑 포함)
         // ============================================================================
         function saveAndGenerate() {
             const mappings = [];
@@ -585,7 +588,7 @@
                 return showToast('코어 서버와 연결되어 있지 않아 저장할 수 없습니다.', true);
             }
 
-            // 웹 호스팅 주소 기준
+            // 웹 호스팅 주소를 기준으로 뷰어 URL 생성
             const currentUrlBase = window.location.origin + window.location.pathname.replace('begopanyang.html', 'Viewer.html');
             const urlObj = new URL(currentUrlBase);
             
