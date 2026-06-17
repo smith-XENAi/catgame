@@ -34,15 +34,13 @@
         let floatTexts = [];
 
         const urlParams = new URLSearchParams(window.location.search);
-        const ngrokWs = urlParams.get('ws');
+        const tunnelWs = urlParams.get('ws');
         
-        // [핵심 수정 1] 127.0.0.1 고정을 풀고, 접속한 브라우저의 실제 호스트 IP를 자동 추적합니다.
-        const currentHost = window.location.hostname || "127.0.0.1";
-        let assetBaseUrl = `http://${currentHost}:8340`; 
-        
-        if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
-            let cleanNgrok = ngrokWs.replace(/\/+$/, "");
-            assetBaseUrl = cleanNgrok.replace("wss://", "https://").replace("ws://", "http://");
+        // 이미지 에셋 로드를 위한 Base URL 설정 로직 (Cloudflare 및 로컬 호환)
+        let assetBaseUrl = "http://127.0.0.1:8340"; 
+        if (tunnelWs && tunnelWs.trim() !== "") {
+            let cleanTunnel = tunnelWs.trim().replace(/\/+$/, "");
+            assetBaseUrl = cleanTunnel.replace("wss://", "https://").replace("ws://", "http://");
         }
 
         const LOCAL_CAT_DB_URL = `${assetBaseUrl}/modules/m_begopanyang/image/d_catdesign/`;
@@ -97,7 +95,6 @@
                 this.domElement.style.position = 'absolute';
                 this.domElement.style.pointerEvents = 'none';
                 this.domElement.style.transform = 'translate(-50%, -100%)';
-                // [이전 수정 반영] 고양이의 z-index를 낮춤 (먹이 50보다 뒤로 가도록 30으로 설정)
                 this.domElement.style.zIndex = '30';
                 this.domElement.style.imageRendering = 'pixelated'; 
                 this.domElement.style.display = 'none';
@@ -358,7 +355,6 @@
                 fData.domElement.src = imgUrl;
                 fData.domElement.style.position = 'absolute';
                 fData.domElement.style.pointerEvents = 'none';
-                // [이전 수정 반영] 먹이의 z-index를 50으로 높임 (고양이보다 앞으로)
                 fData.domElement.style.zIndex = '50';
                 fData.domElement.style.imageRendering = 'pixelated';
                 fData.domElement.style.objectFit = 'contain';
@@ -563,15 +559,18 @@
             statusEl.title = "서버 연결 시도 중...";
 
             try { 
-                // [핵심 수정 2] 웹소켓 연결 시에도 하드코딩된 127.0.0.1 대신 접속한 IP 주소를 유동적으로 사용합니다.
-                let targetWsUrl = `ws://${currentHost}:8340`;
-                if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
-                    let cleanNgrok = ngrokWs.replace(/\/+$/, "");
-                    targetWsUrl = cleanNgrok.replace("https://", "wss://").replace("http://", "ws://");
-                    if (!targetWsUrl.startsWith("ws")) targetWsUrl = "wss://" + targetWsUrl;
+                // [웹소켓 로직 보강] Cloudflare 주소를 절대적으로 완벽하게 파싱합니다.
+                let targetWsUrl = "ws://127.0.0.1:8340";
+                
+                if (tunnelWs && tunnelWs.trim() !== "") {
+                    let cleanUrl = tunnelWs.trim().replace(/\/+$/, "");
+                    targetWsUrl = cleanUrl.replace("https://", "wss://").replace("http://", "ws://");
+                    if (!targetWsUrl.startsWith("ws")) {
+                        targetWsUrl = "wss://" + targetWsUrl.replace("https://", "");
+                    }
                 } else {
-                    const wsPort = urlParams.get('port') || '8340';
-                    targetWsUrl = `ws://${currentHost}:${wsPort}`;
+                    const currentHost = window.location.hostname || "127.0.0.1";
+                    targetWsUrl = `ws://${currentHost}:8340`;
                 }
                 
                 ws = new WebSocket(targetWsUrl); 
