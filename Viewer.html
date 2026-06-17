@@ -8,7 +8,6 @@
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
         canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; position: relative; z-index: 60; pointer-events: none; }
-        /* [수정] 텍스트 대신 점 모양으로 표시하기 위한 스타일링 및 상태별 컬러 클래스 추가 */
         #connection-status { 
             position: absolute; top: 15px; right: 15px; z-index: 100;
             width: 12px; height: 12px; border-radius: 50%;
@@ -34,10 +33,9 @@
         let foods = [];
         let floatTexts = [];
 
-        // Ngrok 외부 접속 경로 파싱
         const urlParams = new URLSearchParams(window.location.search);
         const ngrokWs = urlParams.get('ws');
-        let assetBaseUrl = "http://127.0.0.1:8340"; // 지정된 포트 8340
+        let assetBaseUrl = "http://127.0.0.1:8340"; 
         
         if (ngrokWs && ngrokWs !== "null" && ngrokWs !== "undefined" && ngrokWs.trim() !== "") {
             let cleanNgrok = ngrokWs.replace(/\/+$/, "");
@@ -75,7 +73,11 @@
         class Cat {
             constructor(donorData, rank) {
                 this.donorName = donorData.nickname;
-                this.donorThumb = donorData.thumb || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNDQ0Ii8+PC9zdmc+';
+                // [개선] 검은 네모박스를 대체하는 예쁜 기본 유저 실루엣 이미지(SVG)
+                const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2FhYSI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==';
+                
+                // [수정] 덮어씌워지는 thumb 대신 순수 프로필을 가리키는 profile_thumb 사용
+                this.donorThumb = donorData.profile_thumb || defaultAvatar;
                 this.totalCoin = donorData.totalCoin;
                 this.rank = rank;
                 this.catId = donorData.catId;
@@ -105,8 +107,10 @@
                 this.currentAnimSrc = null;
 
                 this.avatarImg = new Image();
+                // [개선] JS Image 객체에서도 403 에러가 나지 않도록 우회 속성 명시
+                this.avatarImg.referrerPolicy = "no-referrer";
                 this.avatarImg.onerror = () => {
-                    this.avatarImg.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNDQ0Ii8+PC9zdmc+';
+                    this.avatarImg.src = defaultAvatar;
                     this.avatarImg.onerror = null;
                 };
                 this.avatarImg.src = this.donorThumb;
@@ -284,7 +288,9 @@
                 ctx.shadowOffsetX = 1;
                 ctx.shadowOffsetY = 1;
 
-                if (this.avatarImg) ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
+                if (this.avatarImg) {
+                    ctx.drawImage(this.avatarImg, startX + 5, textY - 10, 15, 15);
+                }
                 
                 const barY = textY + 15;
                 ctx.fillStyle = '#ffcc00';
@@ -293,7 +299,6 @@
                 
                 ctx.restore();
 
-                // [수정] 닉네임 렌더링: 100px 제한 말줄임, 검은글씨, 노란색 outgrow 적용
                 ctx.save();
                 ctx.font = 'bold 11px "Courier New"';
                 let displayName = this.donorName;
@@ -304,12 +309,12 @@
                     displayName += '...';
                 }
                 
-                ctx.strokeStyle = '#ffff00'; // 노란색 외곽선 (outgrow)
+                ctx.strokeStyle = '#ffff00';
                 ctx.lineWidth = 3;
                 ctx.lineJoin = 'round';
                 ctx.strokeText(displayName, startX + 25, textY + 2);
                 
-                ctx.fillStyle = '#000000'; // 검정글씨
+                ctx.fillStyle = '#000000';
                 ctx.fillText(displayName, startX + 25, textY + 2);
                 ctx.restore();
 
@@ -320,7 +325,6 @@
                 const expWidth = Math.min(barWidth, (this.stateData.exp / reqExp) * barWidth);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; 
                 ctx.fillRect(barStartX, barY - 2, barWidth, 4);
-                // [수정] 경험치 게이지를 파란색으로 변경
                 ctx.fillStyle = '#3388ff'; 
                 ctx.fillRect(barStartX, barY - 2, expWidth, 4);
 
@@ -422,21 +426,45 @@
             }
         }
 
+        // [신설] 일반 채팅 감지 시 프로필만 조용히 수집하여 저장하는 함수
+        function processProfileUpdate(data) {
+            const donorName = data.nickname || data.donor_nickname || 'Unknown';
+            const profileThumb = data.profile_thumb || null;
+            
+            if (!profileThumb || !userData.settings) return;
+
+            if (donorHistory[donorName]) {
+                if (!donorHistory[donorName].profile_thumb) {
+                    donorHistory[donorName].profile_thumb = profileThumb;
+                    const activeCat = activeCats.find(c => c.donorName === donorName);
+                    if (activeCat && activeCat.avatarImg) activeCat.avatarImg.src = profileThumb;
+                    saveHistoryToServer();
+                }
+            } else {
+                // 후원 기록이 전혀 없는 신규 시청자라도 프로필은 먼저 수집 (0코인 상태 유지)
+                donorHistory[donorName] = {
+                    nickname: donorName,
+                    profile_thumb: profileThumb,
+                    best_gift_thumb: null,
+                    max_single_coin: 0,
+                    totalCoin: 0
+                };
+                saveHistoryToServer();
+            }
+        }
+
         function processDonation(donationData) {
-            const donorName = donationData.nickname || 'Unknown';
+            const donorName = donationData.nickname || donationData.donor_nickname || 'Unknown';
             const coin = donationData.coin_value || 0;
             
-            let safeThumb = donationData.profile_img || donationData.user_avatar || donationData.avatar_url || donationData.avatar || null;
-            if (!safeThumb && donationData.thumb) {
-                const tLow = donationData.thumb.toLowerCase();
-                if (!tLow.includes('gift') && !tLow.includes('obj') && !tLow.includes('prop')) {
-                    safeThumb = donationData.thumb;
-                }
-            }
+            // [수정] 백엔드에서 명확히 분리해서 보낸 진짜 프로필과 선물 이미지를 각각 수신
+            const profileThumb = donationData.profile_thumb || null;
+            const giftThumb = donationData.gift_thumb || null;
 
             if (!userData.settings || !userData.settings.foodMappings) return; 
 
-            if (!donorHistory[donorName]) {
+            // 기존 정보가 아예 없거나, 프로필만 수집되고 아직 후원(고양이 스탯)이 없는 경우 초기화
+            if (!donorHistory[donorName] || !donorHistory[donorName].stats) {
                 const fixed = (userData.settings.fixedDonors || []).find(d => d.nickname === donorName);
                 
                 let remaining = 120; 
@@ -459,15 +487,29 @@
                 let catId = fixed ? fixed.catId : randomCatId; 
                 let customName = fixed ? fixed.customName : donorName;
 
+                // [수정] 듀얼 이미지(프로필, 최고 선물)와 최고 코인 스탯 필드 추가 구성
                 donorHistory[donorName] = { 
                     nickname: donorName,
-                    thumb: safeThumb || null,
+                    profile_thumb: profileThumb,
+                    best_gift_thumb: giftThumb,
+                    max_single_coin: coin,
                     totalCoin: 0, 
                     catId: catId, 
                     stats: { name: customName, level: 1, exp: 0, speed: spd, eating: eat, maxHp: hp, hp: hp } 
                 };
-            } else if (safeThumb && !donorHistory[donorName].thumb) {
-                donorHistory[donorName].thumb = safeThumb;
+            } else {
+                // 기존 유저인 경우 프로필 보완
+                if (profileThumb && !donorHistory[donorName].profile_thumb) {
+                    donorHistory[donorName].profile_thumb = profileThumb;
+                    const activeCat = activeCats.find(c => c.donorName === donorName);
+                    if (activeCat && activeCat.avatarImg) activeCat.avatarImg.src = profileThumb;
+                }
+            }
+
+            // [핵심] 이번 후원액이 기존 '단일 최대 후원 코인'보다 크면 최고 선물 아이콘 갱신
+            if (coin > 0 && coin >= (donorHistory[donorName].max_single_coin || 0)) {
+                donorHistory[donorName].max_single_coin = coin;
+                if (giftThumb) donorHistory[donorName].best_gift_thumb = giftThumb;
             }
             
             donorHistory[donorName].totalCoin += coin;
@@ -493,7 +535,10 @@
         }
         
         function updateRankings() {
-            const sortedDonors = Object.values(donorHistory).sort((a, b) => b.totalCoin - a.totalCoin);
+            // [방어] 일반 채팅으로 프로필만 등록된(고양이 stats 미보유) 유저는 제외하고 랭킹 산정
+            const sortedDonors = Object.values(donorHistory)
+                .filter(d => d.stats) 
+                .sort((a, b) => b.totalCoin - a.totalCoin);
             const top3 = sortedDonors.slice(0, 3);
             const top3Nicknames = top3.map(d => d.nickname);
 
@@ -520,7 +565,6 @@
             if (ws) { ws.onclose = null; ws.close(); }
             const statusEl = document.getElementById('connection-status');
             
-            // [수정] 연결 시도 중 - 노란색(Yellow) 점 (클래스 초기화)
             statusEl.className = '';
             statusEl.title = "서버 연결 시도 중...";
 
@@ -539,7 +583,6 @@
             } catch (e) { return; }
 
             ws.onopen = () => {
-                // [수정] 연결 성공 - 녹색(Green) 점 (connected 클래스 부여)
                 statusEl.className = 'connected';
                 statusEl.title = "서버 연결 성공";
                 
@@ -560,6 +603,19 @@
                     if (Object.keys(donorHistory).length > 0) updateRankings();
                 }
 
+                // [신설] 일반 채팅 수신 시 조용히 프로필만 업데이트
+                if (data.action === "chat_profile_update") {
+                    let isMyChannel = true;
+                    if (data.target_broadcaster && currentUser) {
+                        const target = String(data.target_broadcaster).toLowerCase();
+                        const current = String(currentUser).toLowerCase().replace('@', '');
+                        if (target !== current && !target.includes(current) && !current.includes(target)) isMyChannel = false;
+                    }
+                    if (isMyChannel) {
+                        processProfileUpdate(data);
+                    }
+                }
+
                 if (data.action === "live_donation") {
                     let isMyChannel = true;
                     if (data.target_broadcaster && currentUser) {
@@ -574,7 +630,6 @@
             };
 
             ws.onclose = () => {
-                // [수정] 서버 연결 끊김 - 빨간색(Red) 점 (disconnected 클래스 부여)
                 statusEl.className = 'disconnected';
                 statusEl.title = "서버 연결 끊김";
                 setTimeout(initWebSocket, 3000);
